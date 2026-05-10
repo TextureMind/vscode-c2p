@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "xiosbase": "c",
+        "xutility": "c",
+        "system_error": "c"
+    }
+}

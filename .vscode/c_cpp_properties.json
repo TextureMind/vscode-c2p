@@ -1,0 +1,9 @@
+{
+    "configurations": [
+        {
+            "name": "Amiga",
+            "configurationProvider": "job.amiga-debug"
+        }
+    ],
+    "version": 4
+}
