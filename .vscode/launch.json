@@ -12,7 +12,10 @@
             "workbench": "${config:amiga.workbench-path}",
             "internalConsoleOptions": "openOnSessionStart",
             "cmdList":"C:Mount PIPE:,C:stack 16384,C:SetPatch QUIET",
-            "bsdSocket":false
+            "bsdSocket":false,
+            "emuargs": [
+                "-s", "fpu_model=68881"
+            ]
         },
         {
             "type": "amiga",
@@ -25,7 +28,10 @@
             "workbench": "${config:amiga.workbench-path}",
             "internalConsoleOptions": "openOnSessionStart",
             "cmdList":"C:Mount PIPE:,C:stack 16384,C:SetPatch QUIET",
-            "bsdSocket":false
+            "bsdSocket":false,
+            "emuargs": [
+                "-s", "fpu_model=68881"
+            ]
         }
     ]
 }
