@@ -47,13 +47,22 @@ ASFLAGS = -Wa,-g,--register-prefix-optional,-I$(SDKDIR),-D
 LDFLAGS = -Wl,--emit-relocs,-Ttext=0,-Map=$(OUT).map -L${LIBSDIR}
 VASMFLAGS = -m68020 -Felf -opt-fconst -nowarn=62 -dwarf=3 -quiet -x -I. -I$(SDKDIR)
 
+ifdef WINDOWS
+	MKDIR_P = if not exist "$@" mkdir "$@"
+else
+	MKDIR_P = mkdir -p $@
+endif
+
+obj:
+	@$(MKDIR_P)
+
 all: $(OUT).exe
 
-$(OUT).exe: $(OUT).elf
+$(OUT).exe: $(OUT).elf | out
 	$(info Elf2Hunk $(program).exe)
 	@elf2hunk $(OUT).elf $(OUT).exe -s
 
-$(OUT).elf: $(objects)
+$(OUT).elf: $(objects) | out
 	$(info Linking $(program).elf)
 	@$(CC) $(CCFLAGS) $(LDFLAGS) $(objects) $(static_libs) -o $@
 	@m68k-amiga-elf-objdump --disassemble --no-show-raw-ins --visualize-jumps -S $@ >$(OUT).s
@@ -68,18 +77,18 @@ endif
 
 -include $(objects:.o=.d)
 
-$(cpp_objects) : obj/%.o : %.cpp
+$(cpp_objects) : obj/%.o : %.cpp | obj
 	$(info Compiling $<)
 	@$(CC) $(CPPFLAGS) -c -o $@ $(CURDIR)/$<
 
-$(c_objects) : obj/%.o : %.c
+$(c_objects) : obj/%.o : %.c | obj
 	$(info Compiling $<)
 	@$(CC) $(CCFLAGS) -c -o $@ $(CURDIR)/$<
 
-$(s_objects): obj/%.o : %.s
+$(s_objects): obj/%.o : %.s | obj
 	$(info Assembling $<)
 	@$(CC) $(CCFLAGS) $(ASFLAGS) -c -o $@ $(CURDIR)/$<
 
-$(vasm_objects): obj/%.o : %.asm
+$(vasm_objects): obj/%.o : %.asm | obj
 	$(info Assembling $<)
 	@$(VASM) $(VASMFLAGS) -o $@ $(CURDIR)/$<
