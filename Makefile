@@ -2,6 +2,8 @@
 # for better annotations add -dA -dP
 # to generate assembler source with LTO, add to LDFLAGS: -save-temps=cwd
 
+.DEFAULT_GOAL := all
+
 ifdef OS
 	WINDOWS = 1
 	SHELL = cmd.exe
