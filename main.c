@@ -38,6 +38,29 @@ static inline void chunkyToPlanar(struct c2pStruct *arg)
     );
 }
 
+static inline void chunkyToPlanar2Init(int chunkyx, int chunkyy, int scroffsy)
+{
+    register volatile int d0 __asm__("d0") = chunkyx;
+    register volatile int d1 __asm__("d1") = chunkyy;
+    register volatile int d3 __asm__("d3") = scroffsy;
+    __asm__ volatile (
+        "jsr _c2p1x1_8_c5_gen_init"
+        :
+        : "r"(d0), "r"(d1), "r"(d3) 
+    );
+}
+
+static void chunkyToPlanar2(void *input, void *output)
+{
+    register void *a0 __asm__("a0") = input;
+    register void *a1 __asm__("a1") = output;
+    __asm__ volatile (
+        "jsr _c2p1x1_8_c5_gen"
+        :
+        : "r"(a0), "r"(a1)
+    );
+}
+
 __attribute__((always_inline)) inline short mouseLeft()
 {
     return !((*(volatile UBYTE*)0xbfe001)&64);
@@ -302,6 +325,9 @@ int main(int argc, char **argv)
 
     // Init data for c2p conversion
 
+#define USE_C2P_KALMS 
+
+#ifndef USE_C2P_KALMS
     struct c2pStruct c2p;
 
     c2p.startX = 0;
@@ -310,7 +336,7 @@ int main(int argc, char **argv)
     c2p.height = 240;
     c2p.ChunkyBuffer = dstImage;
     c2p.bmap = scr->RastPort.BitMap;
-
+#endif
     // Load image from file
 
     FILE *stream;
@@ -455,8 +481,12 @@ int main(int argc, char **argv)
             }
         }
 
+#ifdef USE_C2P_KALMS
+        chunkyToPlanar2Init(320, 240, 0);
+        chunkyToPlanar2(dstImage, scr->RastPort.BitMap->Planes[0]);
+#else
         chunkyToPlanar(&c2p);
-
+#endif
         waitVbl();
     }
 #else
@@ -465,7 +495,12 @@ int main(int argc, char **argv)
         memcpy(&dstImage[y * 320], &srcImage[y * 256], 256);
     }
 
-    chunkyToPlanar(&c2p);
+#ifdef USE_C2P_KALMS
+        chunkyToPlanar2Init(320, 240, 0);
+        chunkyToPlanar2(dstImage, scr->RastPort.BitMap->Planes[0]);
+#else
+        chunkyToPlanar(&c2p);
+#endif
 #endif
 
     free(dstImage);
