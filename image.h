@@ -3,20 +3,20 @@
 
 #include <stdint.h>
 
-#define IMAGE_DEPTH_8 8
+#define AGF_IMAGE_DEPTH_8 8
 
-typedef struct SImage
+typedef struct AGFImage
 {
     uint16_t width;
     uint16_t height;
     uint16_t depth;
     uint16_t stride;
     uint8_t *data;
-} SImage;
+} AGFImage;
 
-SImage *ImageAlloc(uint16_t width, uint16_t height, uint16_t depth);
-SImage *ImageAlloc8(uint16_t width, uint16_t height);
-void ImageFree(SImage *image);
-uint32_t ImageSize(const SImage *image);
+AGFImage *agf_image_alloc(uint16_t width, uint16_t height, uint16_t depth);
+AGFImage *agf_image_alloc_8(uint16_t width, uint16_t height);
+void agf_image_free(AGFImage *image);
+uint32_t agf_image_size(const AGFImage *image);
 
 #endif

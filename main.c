@@ -317,13 +317,13 @@ int main(int argc, char **argv)
         SetRGB32( &scr->ViewPort, y, (y << 24), (y << 24), (y << 24));
     }
 
-    SImage *screenImage = ImageAlloc8(320, 240);
-    SImage *textureImage = ImageAlloc8(256, 256);
+    AGFImage *screenImage = agf_image_alloc_8(320, 240);
+    AGFImage *textureImage = agf_image_alloc_8(256, 256);
 
     if (screenImage == NULL || textureImage == NULL) {
         printf("Unable to allocate image buffers\n");
-        ImageFree(screenImage);
-        ImageFree(textureImage);
+        agf_image_free(screenImage);
+        agf_image_free(textureImage);
         CloseScreen(scr);
         return 0;
     }
@@ -348,9 +348,9 @@ int main(int argc, char **argv)
     stream = fopen("floortexture.raw", "rb");
     if (stream == NULL) {
         printf("Unable to open floortexture.raw file. Draw gray instead\n");
-        memset(textureImage->data, 128, ImageSize(textureImage));
+        memset(textureImage->data, 128, agf_image_size(textureImage));
     } else {
-        fread(textureImage->data, ImageSize(textureImage), 1, stream);
+        fread(textureImage->data, agf_image_size(textureImage), 1, stream);
         fclose(stream);
     }
 
@@ -386,7 +386,7 @@ int main(int argc, char **argv)
         if (mouseRight() && mouseRightDown == 0) {
             example = example == 0 ? 1 : 0;
             if (example == 1) {
-                memset(screenImage->data, 0, ImageSize(screenImage));
+                memset(screenImage->data, 0, agf_image_size(screenImage));
             }
 
             mouseRightDown = 1;
@@ -508,8 +508,8 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-    ImageFree(screenImage);
-    ImageFree(textureImage);
+    agf_image_free(screenImage);
+    agf_image_free(textureImage);
 
     CloseScreen(scr);
 }
