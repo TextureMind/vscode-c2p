@@ -10,6 +10,7 @@
 
 #include "g_misc.h"
 #include "image.h"
+#include "texture.h"
 
 #define OPTION_USE_CLIB2 1
 #define OPTION_USE_BSD_SOCKET 0
@@ -347,8 +348,8 @@ int main(int argc, char **argv)
     FILE *stream;
     stream = fopen("floortexture.raw", "rb");
     if (stream == NULL) {
-        printf("Unable to open floortexture.raw file. Draw gray instead\n");
-        memset(textureImage->data, 128, agf_image_size(textureImage));
+        printf("Unable to open floortexture.raw file. Generate blobs texture instead\n");
+        agf_texture_generate_blobs(textureImage, 8);
     } else {
         fread(textureImage->data, agf_image_size(textureImage), 1, stream);
         fclose(stream);
