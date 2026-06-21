@@ -320,6 +320,7 @@ int main(int argc, char **argv)
 
     AGFImage *screenImage = agf_image_alloc_8(320, 240);
     AGFImage *textureImage = agf_image_alloc_8(256, 256);
+    AGFTextureAnimation *textureAnimation = NULL;
 
     if (screenImage == NULL || textureImage == NULL) {
         printf("Unable to allocate image buffers\n");
@@ -348,8 +349,13 @@ int main(int argc, char **argv)
     FILE *stream;
     stream = fopen("floortexture.raw", "rb");
     if (stream == NULL) {
-        printf("Unable to open floortexture.raw file. Generate blobs texture instead\n");
-        agf_texture_generate_blobs(textureImage, 8);
+        printf("Unable to open floortexture.raw file. Generate animated blobs texture instead\n");
+        textureAnimation = agf_texture_animation_alloc(AGF_TEXTURE_ANIMATION_BLOBS, textureImage->width, textureImage->height, 8);
+        if (textureAnimation == NULL) {
+            agf_texture_generate_blobs(textureImage, 8);
+        } else {
+            agf_texture_animation_render(textureAnimation, textureImage);
+        }
     } else {
         fread(textureImage->data, agf_image_size(textureImage), 1, stream);
         fclose(stream);
@@ -393,6 +399,10 @@ int main(int argc, char **argv)
             mouseRightDown = 1;
         } else if (!mouseRight() && mouseRightDown == 1) {
             mouseRightDown = 0;
+        }
+
+        if (textureAnimation != NULL) {
+            agf_texture_animation_render(textureAnimation, textureImage);
         }
 
         if (example == 0) { // Image rotation with bilinear filtering
@@ -509,6 +519,7 @@ int main(int argc, char **argv)
 #endif
 #endif
 
+    agf_texture_animation_free(textureAnimation);
     agf_image_free(screenImage);
     agf_image_free(textureImage);
 
