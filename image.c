@@ -28,7 +28,7 @@ AGFImage *agf_image_alloc(uint16_t width, uint16_t height, uint16_t depth)
     image->height = height;
     image->depth = depth;
     image->stride = width;
-    image->data = (uint8_t *)malloc(agf_image_size(image));
+    image->data = (uint8_t *)malloc(image->stride * image->height);
 
     if (image->data == NULL) {
         free(image);
@@ -45,10 +45,3 @@ AGFImage *agf_image_alloc_8(uint16_t width, uint16_t height)
     return agf_image_alloc(width, height, AGF_IMAGE_DEPTH_8);
 }
 
-void agf_image_free(AGFImage *image)
-{
-    if (image != NULL) {
-        free(image->data);
-        free(image);
-    }
-}

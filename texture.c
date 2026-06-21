@@ -90,7 +90,7 @@ int agf_texture_generate_sphere(AGFImage *image)
                 col = 256.0f;
             }
 
-            src_col = (uint32_t)sqrt(fabs(65536.0f - (col * col)));
+            src_col = (uint32_t)sqrt(65536.0f - col * col);
             if (src_col > 255) {
                 src_col = 255;
             }
@@ -310,6 +310,7 @@ int agf_texture_generate_lumps(AGFImage *image, uint16_t nparticles)
     }
 
     agf_image_free(sphere);
+
     return 1;
 }
 
@@ -352,5 +353,6 @@ int agf_texture_generate_blobs(AGFImage *image, uint16_t nparticles)
     }
 
     agf_image_free(cone);
+
     return 1;
 }
