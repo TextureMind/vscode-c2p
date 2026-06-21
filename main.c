@@ -9,6 +9,7 @@
 #include <proto/graphics.h>
 
 #include "g_misc.h"
+#include "image.h"
 
 #define OPTION_USE_CLIB2 1
 #define OPTION_USE_BSD_SOCKET 0
@@ -16,6 +17,7 @@
 
 #if OPTION_USE_CLIB2
 #include <stdlib_headers.h>
+#include <math_headers.h>
 #endif
 
 struct c2pStruct
@@ -254,7 +256,7 @@ __attribute__((used)) __attribute__((section(".text.unlikely"))) void _start(int
 
     if (IntuitionBase != NULL && DOSBase != NULL && UtilityBase != NULL && GfxBase != NULL && CxBase != NULL && IconBase != NULL) {
 #if OPTION_USE_CLIB2
-        __UtilityBase = UtilityBase; // we need to add this because of macro DECLARE_UTILITYBASE()
+        __UtilityBase = (struct Library *)UtilityBase; // we need to add this because of macro DECLARE_UTILITYBASE()
 
         if(setjmp(__exit_jmp_buf) != 0) {
             goto out; // target for exit
@@ -293,7 +295,7 @@ int main(int argc, char **argv)
     struct Screen *scr;
 
     scr = OpenScreenTags(NULL,
-                         SA_Title,"Chunky to planar example",
+                         SA_Title,(ULONG)"Chunky to planar example",
                          SA_DisplayID, 0x00000000,
                          SA_Depth, 8,
     //                   SA_ShowTitle, FALSE,
@@ -315,13 +317,16 @@ int main(int argc, char **argv)
         SetRGB32( &scr->ViewPort, y, (y << 24), (y << 24), (y << 24));
     }
 
-    unsigned char *dstImage;
-    dstImage = (unsigned char *)malloc(320 * 256);
+    SImage *screenImage = ImageAlloc8(320, 240);
+    SImage *textureImage = ImageAlloc8(256, 256);
 
-    memset(dstImage, 0, 320 * 256);
-
-    unsigned char *srcImage;
-    srcImage = (unsigned char *)malloc(256 * 256);
+    if (screenImage == NULL || textureImage == NULL) {
+        printf("Unable to allocate image buffers\n");
+        ImageFree(screenImage);
+        ImageFree(textureImage);
+        CloseScreen(scr);
+        return 0;
+    }
 
     // Init data for c2p conversion
 
@@ -332,9 +337,9 @@ int main(int argc, char **argv)
 
     c2p.startX = 0;
     c2p.startY = 0;
-    c2p.width = 320;
-    c2p.height = 240;
-    c2p.ChunkyBuffer = dstImage;
+    c2p.width = screenImage->width;
+    c2p.height = screenImage->height;
+    c2p.ChunkyBuffer = screenImage->data;
     c2p.bmap = scr->RastPort.BitMap;
 #endif
     // Load image from file
@@ -343,9 +348,9 @@ int main(int argc, char **argv)
     stream = fopen("floortexture.raw", "rb");
     if (stream == NULL) {
         printf("Unable to open floortexture.raw file. Draw gray instead\n");
-        memset(srcImage, 128,  256 * 256);
+        memset(textureImage->data, 128, ImageSize(textureImage));
     } else {
-        fread(srcImage, 256 * 256, 1, stream);
+        fread(textureImage->data, ImageSize(textureImage), 1, stream);
         fclose(stream);
     }
 
@@ -362,8 +367,8 @@ int main(int argc, char **argv)
 
     unsigned char *c_scan;
 
-    int width = 320;
-    int height = 240;
+    int width = screenImage->width;
+    int height = screenImage->height;
     float center = 256;
     float py = 256;
 
@@ -381,7 +386,7 @@ int main(int argc, char **argv)
         if (mouseRight() && mouseRightDown == 0) {
             example = example == 0 ? 1 : 0;
             if (example == 1) {
-                memset(dstImage, 0, 320 * 256);
+                memset(screenImage->data, 0, ImageSize(screenImage));
             }
 
             mouseRightDown = 1;
@@ -401,16 +406,16 @@ int main(int argc, char **argv)
                 xlong = xc;
                 ylong = yc;
 
-                c_scan = &dstImage[y * width];
+                c_scan = &screenImage->data[y * screenImage->stride];
 
                 for (x = 0; x < width; x++) {
                     tx = xlong >> 16;
                     ty = ylong >> 16;
 
-                    col1 = srcImage[((tx + 0) & 0xFF) + ((ty + 0) & 0xFF) * 256];
-                    col2 = srcImage[((tx + 1) & 0xFF) + ((ty + 0) & 0xFF) * 256];
-                    col3 = srcImage[((tx + 0) & 0xFF) + ((ty + 1) & 0xFF) * 256];
-                    col4 = srcImage[((tx + 1) & 0xFF) + ((ty + 1) & 0xFF) * 256];
+                    col1 = textureImage->data[((tx + 0) & 0xFF) + ((ty + 0) & 0xFF) * textureImage->stride];
+                    col2 = textureImage->data[((tx + 1) & 0xFF) + ((ty + 0) & 0xFF) * textureImage->stride];
+                    col3 = textureImage->data[((tx + 0) & 0xFF) + ((ty + 1) & 0xFF) * textureImage->stride];
+                    col4 = textureImage->data[((tx + 1) & 0xFF) + ((ty + 1) & 0xFF) * textureImage->stride];
 
                     u = xlong & 0x0000FFFF;
                     v = ylong & 0x0000FFFF;
@@ -455,16 +460,16 @@ int main(int argc, char **argv)
                 xlong = (long)(hx * 65536.0f);
                 ylong = (long)(hy * 65536.0f);
 
-                c_scan = &dstImage[y * width];
+                c_scan = &screenImage->data[y * screenImage->stride];
 
                 for (x = 0; x < width; x++) {
                     tx = xlong >> 16;
                     ty = ylong >> 16;
 
-                    col1 = srcImage[((tx + 0) & 0xFF) + ((ty + 0) & 0xFF) * 256];
-                    col2 = srcImage[((tx + 1) & 0xFF) + ((ty + 0) & 0xFF) * 256];
-                    col3 = srcImage[((tx + 0) & 0xFF) + ((ty + 1) & 0xFF) * 256];
-                    col4 = srcImage[((tx + 1) & 0xFF) + ((ty + 1) & 0xFF) * 256];
+                    col1 = textureImage->data[((tx + 0) & 0xFF) + ((ty + 0) & 0xFF) * textureImage->stride];
+                    col2 = textureImage->data[((tx + 1) & 0xFF) + ((ty + 0) & 0xFF) * textureImage->stride];
+                    col3 = textureImage->data[((tx + 0) & 0xFF) + ((ty + 1) & 0xFF) * textureImage->stride];
+                    col4 = textureImage->data[((tx + 1) & 0xFF) + ((ty + 1) & 0xFF) * textureImage->stride];
 
                     u = xlong & 0x0000FFFF;
                     v = ylong & 0x0000FFFF;
@@ -482,8 +487,8 @@ int main(int argc, char **argv)
         }
 
 #ifdef USE_C2P_KALMS
-        chunkyToPlanar2Init(320, 240, 0);
-        chunkyToPlanar2(dstImage, scr->RastPort.BitMap->Planes[0]);
+        chunkyToPlanar2Init(screenImage->width, screenImage->height, 0);
+        chunkyToPlanar2(screenImage->data, scr->RastPort.BitMap->Planes[0]);
 #else
         chunkyToPlanar(&c2p);
 #endif
@@ -491,20 +496,20 @@ int main(int argc, char **argv)
     }
 #else
     // simple blit copy
-    for (y = 0; y < 256; y++) {
-        memcpy(&dstImage[y * 320], &srcImage[y * 256], 256);
+    for (y = 0; y < screenImage->height; y++) {
+        memcpy(&screenImage->data[y * screenImage->stride], &textureImage->data[y * textureImage->stride], textureImage->width);
     }
 
 #ifdef USE_C2P_KALMS
-        chunkyToPlanar2Init(320, 240, 0);
-        chunkyToPlanar2(dstImage, scr->RastPort.BitMap->Planes[0]);
+        chunkyToPlanar2Init(screenImage->width, screenImage->height, 0);
+        chunkyToPlanar2(screenImage->data, scr->RastPort.BitMap->Planes[0]);
 #else
         chunkyToPlanar(&c2p);
 #endif
 #endif
 
-    free(dstImage);
-    free(srcImage);
+    ImageFree(screenImage);
+    ImageFree(textureImage);
 
     CloseScreen(scr);
 }

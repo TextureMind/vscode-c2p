@@ -43,7 +43,7 @@ endif
 # The directory where the static libraries are located
 LIBSDIR = $(abspath libs)
 
-CCFLAGS = -g -MP -MMD -m68020 -O3 -mcpu=68020 -nostdlib -Wextra -Wno-unused-function -Wno-volatile-register-var -fomit-frame-pointer -fno-tree-loop-distribution -flto -fwhole-program -fno-exceptions -I${MUISDKDIR} -I$(LIBSDIR)/library -I$(LIBSDIR)/library/include -D__stdargs=
+CCFLAGS = -g -MP -MMD -m68020 -O3 -mcpu=68020 -nostdlib -Wextra -Wno-unused-function -Wno-volatile-register-var -fomit-frame-pointer -fno-tree-loop-distribution -fno-builtin -flto -fwhole-program -fno-exceptions -I${MUISDKDIR} -I$(LIBSDIR)/library -I$(LIBSDIR)/library/include -D__stdargs=
 CPPFLAGS= $(CCFLAGS) -fno-rtti -fcoroutines -fno-use-cxa-atexit
 ASFLAGS = -Wa,-g,--register-prefix-optional,-I$(SDKDIR),-D
 LDFLAGS = -Wl,--emit-relocs,-Ttext=0,-Map=$(OUT).map -L${LIBSDIR}
