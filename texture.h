@@ -22,6 +22,7 @@ typedef struct AGFTextureAnimation
     int32_t *xspeed;
     int32_t *yspeed;
     AGFImage *shape;
+    AGFFreeFunc free_func;
 } AGFTextureAnimation;
 
 void agf_texture_init_sqrt_table(void);
@@ -31,8 +32,12 @@ void agf_texture_blit_lump(AGFImage *dst, const AGFImage *src, float xpos, float
 void agf_texture_blit_blob(AGFImage *dst, const AGFImage *src, float xpos, float ypos);
 int agf_texture_generate_lumps(AGFImage *image, uint16_t nparticles);
 int agf_texture_generate_blobs(AGFImage *image, uint16_t nparticles);
-AGFTextureAnimation *agf_texture_animation_alloc(AGFTextureAnimationType type, uint16_t width, uint16_t height, uint16_t nparticles);
+#define agf_texture_animation_alloc(type, width, height, nparticles) \
+    agf_texture_animation_alloc_with_free((type), (width), (height), (nparticles), free)
+
 void agf_texture_animation_free(AGFTextureAnimation *animation);
+
+AGFTextureAnimation *agf_texture_animation_alloc_with_free(AGFTextureAnimationType type, uint16_t width, uint16_t height, uint16_t nparticles, AGFFreeFunc free_func);
 int agf_texture_animation_render(AGFTextureAnimation *animation, AGFImage *image);
 
 #endif

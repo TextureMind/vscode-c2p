@@ -396,14 +396,14 @@ int agf_texture_generate_blobs(AGFImage *image, uint16_t nparticles)
     return 1;
 }
 
-AGFTextureAnimation *agf_texture_animation_alloc(AGFTextureAnimationType type, uint16_t width, uint16_t height, uint16_t nparticles)
+AGFTextureAnimation *agf_texture_animation_alloc_with_free(AGFTextureAnimationType type, uint16_t width, uint16_t height, uint16_t nparticles, AGFFreeFunc free_func)
 {
     AGFTextureAnimation *animation;
     uint16_t n;
     uint16_t shape_width;
     uint16_t shape_height;
 
-    if (width == 0 || height == 0 || nparticles == 0) {
+    if (width == 0 || height == 0 || nparticles == 0 || free_func == NULL) {
         return NULL;
     }
 
@@ -421,6 +421,7 @@ AGFTextureAnimation *agf_texture_animation_alloc(AGFTextureAnimationType type, u
     animation->xspeed = NULL;
     animation->yspeed = NULL;
     animation->shape = NULL;
+    animation->free_func = free_func;
 
     animation->xpos = (int32_t *)malloc((uint32_t)nparticles * sizeof(int32_t));
     animation->ypos = (int32_t *)malloc((uint32_t)nparticles * sizeof(int32_t));
@@ -475,13 +476,13 @@ AGFTextureAnimation *agf_texture_animation_alloc(AGFTextureAnimationType type, u
 
 void agf_texture_animation_free(AGFTextureAnimation *animation)
 {
-    if (animation != NULL) {
-        free(animation->xpos);
-        free(animation->ypos);
-        free(animation->xspeed);
-        free(animation->yspeed);
+    if (animation != NULL && animation->free_func != NULL) {
+        animation->free_func(animation->xpos);
+        animation->free_func(animation->ypos);
+        animation->free_func(animation->xspeed);
+        animation->free_func(animation->yspeed);
         agf_image_free(animation->shape);
-        free(animation);
+        animation->free_func(animation);
     }
 }
 
