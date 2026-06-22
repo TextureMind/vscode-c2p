@@ -11,6 +11,7 @@
 #include "g_misc.h"
 #include "image.h"
 #include "texture.h"
+#include "render.h"
 
 #define OPTION_USE_CLIB2 1
 #define OPTION_USE_BSD_SOCKET 0
@@ -320,12 +321,14 @@ int main(int argc, char **argv)
 
     AGFImage *screenImage = agf_image_alloc_8(320, 240);
     AGFImage *textureImage = agf_image_alloc_8(256, 256);
+    AGFDepthBuffer *depthBuffer = agf_depth_buffer_alloc(320, 240);
     AGFTextureAnimation *textureAnimation = NULL;
 
-    if (screenImage == NULL || textureImage == NULL) {
+    if (screenImage == NULL || textureImage == NULL || depthBuffer == NULL) {
         printf("Unable to allocate image buffers\n");
         agf_image_free(screenImage);
         agf_image_free(textureImage);
+        agf_depth_buffer_free(depthBuffer);
         CloseScreen(scr);
         return 0;
     }
@@ -391,7 +394,7 @@ int main(int argc, char **argv)
         cosAngle = cos(angle);
 
         if (mouseRight() && mouseRightDown == 0) {
-            example = example == 0 ? 1 : 0;
+            example = (example + 1) % 3;
             if (example == 1) {
                 memset(screenImage->data, 0, agf_image_size(screenImage));
             }
@@ -405,7 +408,39 @@ int main(int argc, char **argv)
             agf_texture_animation_render(textureAnimation, textureImage);
         }
 
-        if (example == 0) { // Image rotation with bilinear filtering
+        if (example == 2) { // Depth buffered flat polygons
+            AGFVertex3i polyBack[4];
+            AGFVertex3i polyFront[3];
+
+            memset(screenImage->data, 0, agf_image_size(screenImage));
+            agf_depth_buffer_clear(depthBuffer, AGF_DEPTH_MAX);
+
+            polyBack[0].x = 70;
+            polyBack[0].y = 55;
+            polyBack[0].z = 42000;
+            polyBack[1].x = 245;
+            polyBack[1].y = 65;
+            polyBack[1].z = 42000;
+            polyBack[2].x = 230;
+            polyBack[2].y = 190;
+            polyBack[2].z = 42000;
+            polyBack[3].x = 85;
+            polyBack[3].y = 180;
+            polyBack[3].z = 42000;
+
+            polyFront[0].x = 160 + (int)(sinAngle * 55.0f);
+            polyFront[0].y = 50;
+            polyFront[0].z = 26000;
+            polyFront[1].x = 80;
+            polyFront[1].y = 205;
+            polyFront[1].z = 26000;
+            polyFront[2].x = 250;
+            polyFront[2].y = 195;
+            polyFront[2].z = 26000;
+
+            agf_draw_polygon_flat(screenImage, depthBuffer, polyBack, 4, 96);
+            agf_draw_polygon_flat(screenImage, depthBuffer, polyFront, 3, 200);
+        } else if (example == 0) { // Image rotation with bilinear filtering
             scale = 1.0f - ((cos(angle) + 1.0f) / 2.25f);
 
             sinas = sin(-angle) * 65536 * scale;
@@ -520,6 +555,7 @@ int main(int argc, char **argv)
 #endif
 
     agf_texture_animation_free(textureAnimation);
+    agf_depth_buffer_free(depthBuffer);
     agf_image_free(screenImage);
     agf_image_free(textureImage);
 
