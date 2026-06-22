@@ -160,3 +160,59 @@ int agf_draw_polygon_flat(AGFImage *image, AGFDepthBuffer *depth, const AGFVerte
 
     return 1;
 }
+
+uint8_t agf_light_flat_color(const AGFDirectionalLight *light, const AGFVertex3n *vertices, uint16_t count)
+{
+    int32_t nx = 0;
+    int32_t ny = 0;
+    int32_t nz = 0;
+    int32_t dot;
+    int32_t color;
+    uint16_t i;
+
+    if (light == NULL || vertices == NULL || count == 0) {
+        return 0;
+    }
+
+    for (i = 0; i < count; i++) {
+        nx += vertices[i].nx;
+        ny += vertices[i].ny;
+        nz += vertices[i].nz;
+    }
+
+    nx /= count;
+    ny /= count;
+    nz /= count;
+
+    dot = (nx * light->nx + ny * light->ny + nz * light->nz) / AGF_NORMAL_SCALE;
+    if (dot < 0) {
+        dot = 0;
+    } else if (dot > AGF_NORMAL_SCALE) {
+        dot = AGF_NORMAL_SCALE;
+    }
+
+    color = light->ambient + (int32_t)(((uint32_t)light->intensity * (uint32_t)dot) / AGF_NORMAL_SCALE);
+    if (color > 255) {
+        color = 255;
+    }
+
+    return (uint8_t)color;
+}
+
+int agf_draw_polygon_lit_flat(AGFImage *image, AGFDepthBuffer *depth, const AGFVertex3n *vertices, uint16_t count, const AGFDirectionalLight *light)
+{
+    AGFVertex3i flat_vertices[8];
+    uint16_t i;
+
+    if (vertices == NULL || count < 3 || count > 8) {
+        return 0;
+    }
+
+    for (i = 0; i < count; i++) {
+        flat_vertices[i].x = vertices[i].x;
+        flat_vertices[i].y = vertices[i].y;
+        flat_vertices[i].z = vertices[i].z;
+    }
+
+    return agf_draw_polygon_flat(image, depth, flat_vertices, count, agf_light_flat_color(light, vertices, count));
+}

@@ -104,6 +104,31 @@ typedef struct CubeVertex
     float z;
 } CubeVertex;
 
+static CubeVertex rotateCubeVector(CubeVertex vector, float sinY, float cosY, float sinX, float cosX, float sinZ, float cosZ)
+{
+    CubeVertex result;
+    float x1;
+    float y1;
+    float z1;
+    float x2;
+    float y2;
+    float z2;
+
+    x1 = vector.x * cosY + vector.z * sinY;
+    y1 = vector.y;
+    z1 = -vector.x * sinY + vector.z * cosY;
+
+    x2 = x1;
+    y2 = y1 * cosX - z1 * sinX;
+    z2 = y1 * sinX + z1 * cosX;
+
+    result.x = x2 * cosZ - y2 * sinZ;
+    result.y = x2 * sinZ + y2 * cosZ;
+    result.z = z2;
+
+    return result;
+}
+
 static void drawRotatingCube(AGFImage *image, AGFDepthBuffer *depth, float angle)
 {
     static const CubeVertex sourceVertices[8] = {
@@ -124,8 +149,17 @@ static void drawRotatingCube(AGFImage *image, AGFDepthBuffer *depth, float angle
         {1, 5, 6, 2},
         {0, 3, 7, 4}
     };
-    static const uint8_t faceColors[6] = {72, 112, 144, 176, 208, 232};
+    static const CubeVertex faceNormals[6] = {
+        { 0.0f,  0.0f, -1.0f},
+        { 0.0f,  0.0f,  1.0f},
+        { 0.0f, -1.0f,  0.0f},
+        { 0.0f,  1.0f,  0.0f},
+        { 1.0f,  0.0f,  0.0f},
+        {-1.0f,  0.0f,  0.0f}
+    };
     AGFVertex3i projected[8];
+    CubeVertex rotatedNormals[6];
+    AGFDirectionalLight light;
     float sinY = sin(angle);
     float cosY = cos(angle);
     float sinX = sin(angle * 0.73f);
@@ -141,49 +175,51 @@ static void drawRotatingCube(AGFImage *image, AGFDepthBuffer *depth, float angle
     memset(image->data, 0, agf_image_size(image));
     agf_depth_buffer_clear(depth, AGF_DEPTH_MAX);
 
+    light.nx = -6000;
+    light.ny = -9000;
+    light.nz = -12000;
+    light.ambient = 42;
+    light.intensity = 196;
+
     for (i = 0; i < 8; i++) {
-        float x = sourceVertices[i].x * scale;
-        float y = sourceVertices[i].y * scale;
-        float z = sourceVertices[i].z * scale;
-        float x1;
-        float y1;
-        float z1;
-        float x2;
-        float y2;
-        float z2;
-        float x3;
-        float y3;
+        CubeVertex source;
+        CubeVertex rotated;
         float z3;
 
-        x1 = x * cosY + z * sinY;
-        y1 = y;
-        z1 = -x * sinY + z * cosY;
+        source.x = sourceVertices[i].x * scale;
+        source.y = sourceVertices[i].y * scale;
+        source.z = sourceVertices[i].z * scale;
+        rotated = rotateCubeVector(source, sinY, cosY, sinX, cosX, sinZ, cosZ);
+        z3 = rotated.z + camera_z;
 
-        x2 = x1;
-        y2 = y1 * cosX - z1 * sinX;
-        z2 = y1 * sinX + z1 * cosX;
-
-        x3 = x2 * cosZ - y2 * sinZ;
-        y3 = x2 * sinZ + y2 * cosZ;
-        z3 = z2 + camera_z;
-
-        projected[i].x = (int16_t)((float)(image->width / 2) + (x3 * focal) / z3);
-        projected[i].y = (int16_t)((float)(image->height / 2) + (y3 * focal) / z3);
+        projected[i].x = (int16_t)((float)(image->width / 2) + (rotated.x * focal) / z3);
+        projected[i].y = (int16_t)((float)(image->height / 2) + (rotated.y * focal) / z3);
         projected[i].z = (uint32_t)(z3 * 256.0f);
     }
 
     for (face = 0; face < 6; face++) {
-        AGFVertex3i polygon[4];
+        CubeVertex normal = rotateCubeVector(faceNormals[face], sinY, cosY, sinX, cosX, sinZ, cosZ);
+        rotatedNormals[face] = normal;
+    }
+
+    for (face = 0; face < 6; face++) {
+        AGFVertex3n polygon[4];
         int32_t ax;
         int32_t ay;
         int32_t bx;
         int32_t by;
         int32_t winding;
+        int vertex;
 
-        polygon[0] = projected[faces[face][0]];
-        polygon[1] = projected[faces[face][1]];
-        polygon[2] = projected[faces[face][2]];
-        polygon[3] = projected[faces[face][3]];
+        for (vertex = 0; vertex < 4; vertex++) {
+            uint8_t index = faces[face][vertex];
+            polygon[vertex].x = projected[index].x;
+            polygon[vertex].y = projected[index].y;
+            polygon[vertex].z = projected[index].z;
+            polygon[vertex].nx = (int16_t)(rotatedNormals[face].x * (float)AGF_NORMAL_SCALE);
+            polygon[vertex].ny = (int16_t)(rotatedNormals[face].y * (float)AGF_NORMAL_SCALE);
+            polygon[vertex].nz = (int16_t)(rotatedNormals[face].z * (float)AGF_NORMAL_SCALE);
+        }
 
         ax = (int32_t)polygon[1].x - polygon[0].x;
         ay = (int32_t)polygon[1].y - polygon[0].y;
@@ -192,7 +228,7 @@ static void drawRotatingCube(AGFImage *image, AGFDepthBuffer *depth, float angle
         winding = ax * by - ay * bx;
 
         if (winding > 0) {
-            agf_draw_polygon_flat(image, depth, polygon, 4, faceColors[face]);
+            agf_draw_polygon_lit_flat(image, depth, polygon, 4, &light);
         }
     }
 }
