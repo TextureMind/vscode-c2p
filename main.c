@@ -96,6 +96,107 @@ static void waitVbl()
 	}
 }
 
+
+typedef struct CubeVertex
+{
+    float x;
+    float y;
+    float z;
+} CubeVertex;
+
+static void drawRotatingCube(AGFImage *image, AGFDepthBuffer *depth, float angle)
+{
+    static const CubeVertex sourceVertices[8] = {
+        {-1.0f, -1.0f, -1.0f},
+        { 1.0f, -1.0f, -1.0f},
+        { 1.0f,  1.0f, -1.0f},
+        {-1.0f,  1.0f, -1.0f},
+        {-1.0f, -1.0f,  1.0f},
+        { 1.0f, -1.0f,  1.0f},
+        { 1.0f,  1.0f,  1.0f},
+        {-1.0f,  1.0f,  1.0f}
+    };
+    static const uint8_t faces[6][4] = {
+        {0, 1, 2, 3},
+        {4, 7, 6, 5},
+        {0, 4, 5, 1},
+        {3, 2, 6, 7},
+        {1, 5, 6, 2},
+        {0, 3, 7, 4}
+    };
+    static const uint8_t faceColors[6] = {72, 112, 144, 176, 208, 232};
+    AGFVertex3i projected[8];
+    float sinY = sin(angle);
+    float cosY = cos(angle);
+    float sinX = sin(angle * 0.73f);
+    float cosX = cos(angle * 0.73f);
+    float sinZ = sin(angle * 0.31f);
+    float cosZ = cos(angle * 0.31f);
+    float scale = 80.0f;
+    float camera_z = 330.0f;
+    float focal = 190.0f;
+    int i;
+    int face;
+
+    memset(image->data, 0, agf_image_size(image));
+    agf_depth_buffer_clear(depth, AGF_DEPTH_MAX);
+
+    for (i = 0; i < 8; i++) {
+        float x = sourceVertices[i].x * scale;
+        float y = sourceVertices[i].y * scale;
+        float z = sourceVertices[i].z * scale;
+        float x1;
+        float y1;
+        float z1;
+        float x2;
+        float y2;
+        float z2;
+        float x3;
+        float y3;
+        float z3;
+
+        x1 = x * cosY + z * sinY;
+        y1 = y;
+        z1 = -x * sinY + z * cosY;
+
+        x2 = x1;
+        y2 = y1 * cosX - z1 * sinX;
+        z2 = y1 * sinX + z1 * cosX;
+
+        x3 = x2 * cosZ - y2 * sinZ;
+        y3 = x2 * sinZ + y2 * cosZ;
+        z3 = z2 + camera_z;
+
+        projected[i].x = (int16_t)((float)(image->width / 2) + (x3 * focal) / z3);
+        projected[i].y = (int16_t)((float)(image->height / 2) + (y3 * focal) / z3);
+        projected[i].z = (uint32_t)(z3 * 256.0f);
+    }
+
+    for (face = 0; face < 6; face++) {
+        AGFVertex3i polygon[4];
+        int32_t ax;
+        int32_t ay;
+        int32_t bx;
+        int32_t by;
+        int32_t winding;
+
+        polygon[0] = projected[faces[face][0]];
+        polygon[1] = projected[faces[face][1]];
+        polygon[2] = projected[faces[face][2]];
+        polygon[3] = projected[faces[face][3]];
+
+        ax = (int32_t)polygon[1].x - polygon[0].x;
+        ay = (int32_t)polygon[1].y - polygon[0].y;
+        bx = (int32_t)polygon[2].x - polygon[0].x;
+        by = (int32_t)polygon[2].y - polygon[0].y;
+        winding = ax * by - ay * bx;
+
+        if (winding > 0) {
+            agf_draw_polygon_flat(image, depth, polygon, 4, faceColors[face]);
+        }
+    }
+}
+
 // We need to declare the libraries as "externally_visible" since we are using the option -fwhole-program in the Makefile
 __attribute__((externally_visible)) struct ExecBase *SysBase;
 __attribute__((externally_visible)) struct IntuitionBase *IntuitionBase = NULL;
@@ -408,38 +509,8 @@ int main(int argc, char **argv)
             agf_texture_animation_render(textureAnimation, textureImage);
         }
 
-        if (example == 2) { // Depth buffered flat polygons
-            AGFVertex3i polyBack[4];
-            AGFVertex3i polyFront[3];
-
-            memset(screenImage->data, 0, agf_image_size(screenImage));
-            agf_depth_buffer_clear(depthBuffer, AGF_DEPTH_MAX);
-
-            polyBack[0].x = 70;
-            polyBack[0].y = 55;
-            polyBack[0].z = 42000;
-            polyBack[1].x = 245;
-            polyBack[1].y = 65;
-            polyBack[1].z = 42000;
-            polyBack[2].x = 230;
-            polyBack[2].y = 190;
-            polyBack[2].z = 42000;
-            polyBack[3].x = 85;
-            polyBack[3].y = 180;
-            polyBack[3].z = 42000;
-
-            polyFront[0].x = 160 + (int)(sinAngle * 55.0f);
-            polyFront[0].y = 50;
-            polyFront[0].z = 26000;
-            polyFront[1].x = 80;
-            polyFront[1].y = 205;
-            polyFront[1].z = 26000;
-            polyFront[2].x = 250;
-            polyFront[2].y = 195;
-            polyFront[2].z = 26000;
-
-            agf_draw_polygon_flat(screenImage, depthBuffer, polyBack, 4, 96);
-            agf_draw_polygon_flat(screenImage, depthBuffer, polyFront, 3, 200);
+        if (example == 2) { // Rotating depth buffered cube
+            drawRotatingCube(screenImage, depthBuffer, angle);
         } else if (example == 0) { // Image rotation with bilinear filtering
             scale = 1.0f - ((cos(angle) + 1.0f) / 2.25f);
 
