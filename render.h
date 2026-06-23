@@ -24,6 +24,13 @@ typedef struct AGFVertex3f
     float m_z;
 } AGFVertex3f;
 
+typedef AGFVertex3f AGFVector3f;
+
+typedef struct AGFMatrix4x4
+{
+    float m_values[4][4];
+} AGFMatrix4x4;
+
 typedef struct AGFVertex3i
 {
     int16_t m_x;
@@ -50,8 +57,79 @@ typedef struct AGFDirectionalLight
     uint8_t m_intensity;
 } AGFDirectionalLight;
 
+typedef struct AGFPolyTriangle3D
+{
+    uint32_t m_indices[3];
+    AGFVector3f m_normal;
+} AGFPolyTriangle3D;
+
+typedef struct AGFPolyQuad3D
+{
+    uint32_t m_indices[4];
+    AGFVector3f m_normal;
+} AGFPolyQuad3D;
+
+typedef struct AGFPolygonHull3D
+{
+    AGFVector3f *m_points;
+    uint32_t m_npoints;
+    AGFPolyTriangle3D *m_triangles;
+    uint32_t m_ntriangles;
+    AGFPolyQuad3D *m_quads;
+    uint32_t m_nquads;
+    AGFFreeFunc m_free_func;
+} AGFPolygonHull3D;
+
+typedef struct AGFVertexAttribute3f
+{
+    uint32_t m_index;
+    AGFVector3f m_normal;
+} AGFVertexAttribute3f;
+
+typedef struct AGFMeshTriangle3D
+{
+    uint32_t m_indices[3];
+    uint32_t m_polygonIndex;
+} AGFMeshTriangle3D;
+
+typedef struct AGFMeshQuad3D
+{
+    uint32_t m_indices[4];
+    uint32_t m_polygonIndex;
+} AGFMeshQuad3D;
+
+typedef struct AGFMeshSlice3D
+{
+    AGFVertexAttribute3f *m_vertexAttributes;
+    uint32_t m_nvertexAttributes;
+    AGFMeshTriangle3D *m_triangles;
+    uint32_t m_ntriangles;
+    AGFMeshQuad3D *m_quads;
+    uint32_t m_nquads;
+    AGFFreeFunc m_free_func;
+} AGFMeshSlice3D;
+
+typedef struct AGFMesh3D
+{
+    AGFPolygonHull3D m_polygonHull;
+    AGFMeshSlice3D *m_slices;
+    uint32_t m_nslices;
+    AGFFreeFunc m_free_func;
+} AGFMesh3D;
+
 #define agf_depth_buffer_alloc(width, height) \
     agf_depth_buffer_alloc_with_free((width), (height), free)
+
+void agf_matrix_identity(AGFMatrix4x4 *p_matrix);
+void agf_matrix_translation(AGFMatrix4x4 *p_matrix, float p_x, float p_y, float p_z);
+void agf_matrix_scale(AGFMatrix4x4 *p_matrix, float p_x, float p_y, float p_z);
+void agf_matrix_rotation_x(AGFMatrix4x4 *p_matrix, float p_angle);
+void agf_matrix_rotation_y(AGFMatrix4x4 *p_matrix, float p_angle);
+void agf_matrix_rotation_z(AGFMatrix4x4 *p_matrix, float p_angle);
+void agf_matrix_perspective(AGFMatrix4x4 *p_matrix, float p_focal, float p_aspect, float p_near, float p_far);
+void agf_matrix_multiply(AGFMatrix4x4 *p_out, const AGFMatrix4x4 *p_a, const AGFMatrix4x4 *p_b);
+AGFVector3f agf_matrix_transform_point(const AGFMatrix4x4 *p_matrix, AGFVector3f p_point);
+AGFVector3f agf_matrix_transform_vector(const AGFMatrix4x4 *p_matrix, AGFVector3f p_vector);
 
 AGFDepthBuffer *agf_depth_buffer_alloc_with_free(uint16_t p_width, uint16_t p_height, AGFFreeFunc p_free_func);
 void agf_depth_buffer_free(AGFDepthBuffer *p_buffer);

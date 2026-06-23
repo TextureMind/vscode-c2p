@@ -96,34 +96,19 @@ static void waitVbl()
 	}
 }
 
-static AGFVertex3f rotateCubeVector(AGFVertex3f vector, float sinY, float cosY, float sinX, float cosX, float sinZ, float cosZ)
+static void agf_project_vertex(const AGFVector3f *p_point, AGFVertex3i *p_vertex, uint16_t p_width, uint16_t p_height, float p_camera_z, float p_focal)
 {
-    AGFVertex3f result;
-    float x1;
-    float y1;
-    float z1;
-    float x2;
-    float y2;
-    float z2;
+    float z3;
 
-    x1 = vector.m_x * cosY + vector.m_z * sinY;
-    y1 = vector.m_y;
-    z1 = -vector.m_x * sinY + vector.m_z * cosY;
-
-    x2 = x1;
-    y2 = y1 * cosX - z1 * sinX;
-    z2 = y1 * sinX + z1 * cosX;
-
-    result.m_x = x2 * cosZ - y2 * sinZ;
-    result.m_y = x2 * sinZ + y2 * cosZ;
-    result.m_z = z2;
-
-    return result;
+    z3 = p_point->m_z + p_camera_z;
+    p_vertex->m_x = (int16_t)((float)(p_width / 2) + (p_point->m_x * p_focal) / z3);
+    p_vertex->m_y = (int16_t)((float)(p_height / 2) + (p_point->m_y * p_focal) / z3);
+    p_vertex->m_z = (uint32_t)(z3 * 256.0f);
 }
 
-static void drawRotatingCube(AGFImage *image, AGFDepthBuffer *depth, float angle)
+static void agf_build_cube_mesh(AGFMesh3D *p_mesh)
 {
-    static const AGFVertex3f sourceVertices[8] = {
+    static AGFVector3f points[8] = {
         {-1.0f, -1.0f, -1.0f},
         { 1.0f, -1.0f, -1.0f},
         { 1.0f,  1.0f, -1.0f},
@@ -133,39 +118,70 @@ static void drawRotatingCube(AGFImage *image, AGFDepthBuffer *depth, float angle
         { 1.0f,  1.0f,  1.0f},
         {-1.0f,  1.0f,  1.0f}
     };
-    static const uint8_t faces[6][4] = {
-        {0, 1, 2, 3},
-        {4, 7, 6, 5},
-        {0, 4, 5, 1},
-        {3, 2, 6, 7},
-        {1, 5, 6, 2},
-        {0, 3, 7, 4}
+    static AGFPolyQuad3D hull_quads[6] = {
+        {{0, 1, 2, 3}, { 0.0f,  0.0f, -1.0f}},
+        {{4, 7, 6, 5}, { 0.0f,  0.0f,  1.0f}},
+        {{0, 4, 5, 1}, { 0.0f, -1.0f,  0.0f}},
+        {{3, 2, 6, 7}, { 0.0f,  1.0f,  0.0f}},
+        {{1, 5, 6, 2}, { 1.0f,  0.0f,  0.0f}},
+        {{0, 3, 7, 4}, {-1.0f,  0.0f,  0.0f}}
     };
-    static const AGFVertex3f faceNormals[6] = {
-        { 0.0f,  0.0f, -1.0f},
-        { 0.0f,  0.0f,  1.0f},
-        { 0.0f, -1.0f,  0.0f},
-        { 0.0f,  1.0f,  0.0f},
-        { 1.0f,  0.0f,  0.0f},
-        {-1.0f,  0.0f,  0.0f}
+    static AGFVertexAttribute3f vertex_attributes[24] = {
+        {0, { 0.0f,  0.0f, -1.0f}}, {1, { 0.0f,  0.0f, -1.0f}}, {2, { 0.0f,  0.0f, -1.0f}}, {3, { 0.0f,  0.0f, -1.0f}},
+        {4, { 0.0f,  0.0f,  1.0f}}, {7, { 0.0f,  0.0f,  1.0f}}, {6, { 0.0f,  0.0f,  1.0f}}, {5, { 0.0f,  0.0f,  1.0f}},
+        {0, { 0.0f, -1.0f,  0.0f}}, {4, { 0.0f, -1.0f,  0.0f}}, {5, { 0.0f, -1.0f,  0.0f}}, {1, { 0.0f, -1.0f,  0.0f}},
+        {3, { 0.0f,  1.0f,  0.0f}}, {2, { 0.0f,  1.0f,  0.0f}}, {6, { 0.0f,  1.0f,  0.0f}}, {7, { 0.0f,  1.0f,  0.0f}},
+        {1, { 1.0f,  0.0f,  0.0f}}, {5, { 1.0f,  0.0f,  0.0f}}, {6, { 1.0f,  0.0f,  0.0f}}, {2, { 1.0f,  0.0f,  0.0f}},
+        {0, {-1.0f,  0.0f,  0.0f}}, {3, {-1.0f,  0.0f,  0.0f}}, {7, {-1.0f,  0.0f,  0.0f}}, {4, {-1.0f,  0.0f,  0.0f}}
     };
-    AGFVertex3i projected[8];
-    AGFVertex3f rotatedNormals[6];
+    static AGFMeshQuad3D mesh_quads[6] = {
+        {{ 0,  1,  2,  3}, 0},
+        {{ 4,  5,  6,  7}, 1},
+        {{ 8,  9, 10, 11}, 2},
+        {{12, 13, 14, 15}, 3},
+        {{16, 17, 18, 19}, 4},
+        {{20, 21, 22, 23}, 5}
+    };
+    static AGFMeshSlice3D slices[1] = {
+        {vertex_attributes, 24, NULL, 0, mesh_quads, 6, NULL}
+    };
+
+    p_mesh->m_polygonHull.m_points = points;
+    p_mesh->m_polygonHull.m_npoints = 8;
+    p_mesh->m_polygonHull.m_triangles = NULL;
+    p_mesh->m_polygonHull.m_ntriangles = 0;
+    p_mesh->m_polygonHull.m_quads = hull_quads;
+    p_mesh->m_polygonHull.m_nquads = 6;
+    p_mesh->m_polygonHull.m_free_func = NULL;
+    p_mesh->m_slices = slices;
+    p_mesh->m_nslices = 1;
+    p_mesh->m_free_func = NULL;
+}
+
+static void drawRotatingCube(AGFImage *p_image, AGFDepthBuffer *p_depth, float p_angle)
+{
+    AGFMesh3D mesh;
+    AGFMatrix4x4 scale_matrix;
+    AGFMatrix4x4 rotation_x;
+    AGFMatrix4x4 rotation_y;
+    AGFMatrix4x4 rotation_z;
+    AGFMatrix4x4 model_matrix;
+    AGFMatrix4x4 normal_matrix;
+    AGFMatrix4x4 tmp_matrix;
+    AGFVector3f transformed_points[8];
+    AGFVector3f transformed_normals[24];
+    AGFVertex3i projected_points[8];
     AGFDirectionalLight light;
-    float sinY = sin(angle);
-    float cosY = cos(angle);
-    float sinX = sin(angle * 0.73f);
-    float cosX = cos(angle * 0.73f);
-    float sinZ = sin(angle * 0.31f);
-    float cosZ = cos(angle * 0.31f);
     float scale = 80.0f;
     float camera_z = 330.0f;
     float focal = 190.0f;
-    int i;
-    int face;
+    uint32_t i;
+    uint32_t slice_index;
 
-    memset(image->m_data, 0, agf_image_size(image));
-    agf_depth_buffer_clear(depth, AGF_DEPTH_MAX);
+    agf_build_cube_mesh(&mesh);
+
+    memset(p_image->m_data, 0, agf_image_size(p_image));
+    agf_depth_buffer_clear(p_depth, AGF_DEPTH_MAX);
 
     light.m_nx = -6000;
     light.m_ny = -9000;
@@ -173,54 +189,60 @@ static void drawRotatingCube(AGFImage *image, AGFDepthBuffer *depth, float angle
     light.m_ambient = 42;
     light.m_intensity = 196;
 
-    for (i = 0; i < 8; i++) {
-        AGFVertex3f source;
-        AGFVertex3f rotated;
-        float z3;
+    agf_matrix_scale(&scale_matrix, scale, scale, scale);
+    agf_matrix_rotation_y(&rotation_y, p_angle);
+    agf_matrix_rotation_x(&rotation_x, p_angle * 0.73f);
+    agf_matrix_rotation_z(&rotation_z, p_angle * 0.31f);
+    agf_matrix_multiply(&tmp_matrix, &rotation_x, &rotation_y);
+    agf_matrix_multiply(&normal_matrix, &rotation_z, &tmp_matrix);
+    agf_matrix_multiply(&model_matrix, &normal_matrix, &scale_matrix);
 
-        source.m_x = sourceVertices[i].m_x * scale;
-        source.m_y = sourceVertices[i].m_y * scale;
-        source.m_z = sourceVertices[i].m_z * scale;
-        rotated = rotateCubeVector(source, sinY, cosY, sinX, cosX, sinZ, cosZ);
-        z3 = rotated.m_z + camera_z;
-
-        projected[i].m_x = (int16_t)((float)(image->m_width / 2) + (rotated.m_x * focal) / z3);
-        projected[i].m_y = (int16_t)((float)(image->m_height / 2) + (rotated.m_y * focal) / z3);
-        projected[i].m_z = (uint32_t)(z3 * 256.0f);
+    for (i = 0; i < mesh.m_polygonHull.m_npoints; i++) {
+        transformed_points[i] = agf_matrix_transform_point(&model_matrix, mesh.m_polygonHull.m_points[i]);
+        agf_project_vertex(&transformed_points[i], &projected_points[i], p_image->m_width, p_image->m_height, camera_z, focal);
     }
 
-    for (face = 0; face < 6; face++) {
-        AGFVertex3f normal = rotateCubeVector(faceNormals[face], sinY, cosY, sinX, cosX, sinZ, cosZ);
-        rotatedNormals[face] = normal;
-    }
+    for (slice_index = 0; slice_index < mesh.m_nslices; slice_index++) {
+        AGFMeshSlice3D *slice = &mesh.m_slices[slice_index];
+        uint32_t attribute_index;
+        uint32_t quad_index;
 
-    for (face = 0; face < 6; face++) {
-        AGFVertex3n polygon[4];
-        int32_t ax;
-        int32_t ay;
-        int32_t bx;
-        int32_t by;
-        int32_t winding;
-        int vertex;
-
-        for (vertex = 0; vertex < 4; vertex++) {
-            uint8_t index = faces[face][vertex];
-            polygon[vertex].m_x = projected[index].m_x;
-            polygon[vertex].m_y = projected[index].m_y;
-            polygon[vertex].m_z = projected[index].m_z;
-            polygon[vertex].m_nx = (int16_t)(rotatedNormals[face].m_x * (float)AGF_NORMAL_SCALE);
-            polygon[vertex].m_ny = (int16_t)(rotatedNormals[face].m_y * (float)AGF_NORMAL_SCALE);
-            polygon[vertex].m_nz = (int16_t)(rotatedNormals[face].m_z * (float)AGF_NORMAL_SCALE);
+        for (attribute_index = 0; attribute_index < slice->m_nvertexAttributes; attribute_index++) {
+            transformed_normals[attribute_index] = agf_matrix_transform_vector(&normal_matrix, slice->m_vertexAttributes[attribute_index].m_normal);
         }
 
-        ax = (int32_t)polygon[1].m_x - polygon[0].m_x;
-        ay = (int32_t)polygon[1].m_y - polygon[0].m_y;
-        bx = (int32_t)polygon[2].m_x - polygon[0].m_x;
-        by = (int32_t)polygon[2].m_y - polygon[0].m_y;
-        winding = ax * by - ay * bx;
+        for (quad_index = 0; quad_index < slice->m_nquads; quad_index++) {
+            AGFMeshQuad3D *quad = &slice->m_quads[quad_index];
+            AGFVertex3n polygon[4];
+            int32_t ax;
+            int32_t ay;
+            int32_t bx;
+            int32_t by;
+            int32_t winding;
+            uint32_t vertex;
 
-        if (winding > 0) {
-            agf_draw_polygon_lit_flat(image, depth, polygon, 4, &light);
+            for (vertex = 0; vertex < 4; vertex++) {
+                uint32_t vertex_attribute_index = quad->m_indices[vertex];
+                AGFVertexAttribute3f *vertex_attribute = &slice->m_vertexAttributes[vertex_attribute_index];
+                uint32_t point_index = vertex_attribute->m_index;
+
+                polygon[vertex].m_x = projected_points[point_index].m_x;
+                polygon[vertex].m_y = projected_points[point_index].m_y;
+                polygon[vertex].m_z = projected_points[point_index].m_z;
+                polygon[vertex].m_nx = (int16_t)(transformed_normals[vertex_attribute_index].m_x * (float)AGF_NORMAL_SCALE);
+                polygon[vertex].m_ny = (int16_t)(transformed_normals[vertex_attribute_index].m_y * (float)AGF_NORMAL_SCALE);
+                polygon[vertex].m_nz = (int16_t)(transformed_normals[vertex_attribute_index].m_z * (float)AGF_NORMAL_SCALE);
+            }
+
+            ax = (int32_t)polygon[1].m_x - polygon[0].m_x;
+            ay = (int32_t)polygon[1].m_y - polygon[0].m_y;
+            bx = (int32_t)polygon[2].m_x - polygon[0].m_x;
+            by = (int32_t)polygon[2].m_y - polygon[0].m_y;
+            winding = ax * by - ay * bx;
+
+            if (quad->m_polygonIndex < mesh.m_polygonHull.m_nquads && winding > 0) {
+                agf_draw_polygon_lit_flat(p_image, p_depth, polygon, 4, &light);
+            }
         }
     }
 }

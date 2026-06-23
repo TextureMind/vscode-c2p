@@ -1,11 +1,187 @@
 #include "render.h"
 
 #include <stdlib_headers.h>
+#include <math_headers.h>
 
 static int agf_render_target_valid(const AGFImage *p_image, const AGFDepthBuffer *p_depth)
 {
     return p_image != NULL && p_depth != NULL && p_image->m_data != NULL && p_depth->m_data != NULL &&
            p_image->m_depth == AGF_IMAGE_DEPTH_8 && p_image->m_width == p_depth->m_width && p_image->m_height == p_depth->m_height;
+}
+
+void agf_matrix_identity(AGFMatrix4x4 *p_matrix)
+{
+    uint16_t row;
+    uint16_t col;
+
+    if (p_matrix == NULL) {
+        return;
+    }
+
+    for (row = 0; row < 4; row++) {
+        for (col = 0; col < 4; col++) {
+            p_matrix->m_values[row][col] = (row == col) ? 1.0f : 0.0f;
+        }
+    }
+}
+
+void agf_matrix_translation(AGFMatrix4x4 *p_matrix, float p_x, float p_y, float p_z)
+{
+    agf_matrix_identity(p_matrix);
+    if (p_matrix == NULL) {
+        return;
+    }
+
+    p_matrix->m_values[0][3] = p_x;
+    p_matrix->m_values[1][3] = p_y;
+    p_matrix->m_values[2][3] = p_z;
+}
+
+void agf_matrix_scale(AGFMatrix4x4 *p_matrix, float p_x, float p_y, float p_z)
+{
+    agf_matrix_identity(p_matrix);
+    if (p_matrix == NULL) {
+        return;
+    }
+
+    p_matrix->m_values[0][0] = p_x;
+    p_matrix->m_values[1][1] = p_y;
+    p_matrix->m_values[2][2] = p_z;
+}
+
+void agf_matrix_rotation_x(AGFMatrix4x4 *p_matrix, float p_angle)
+{
+    float sin_angle;
+    float cos_angle;
+
+    agf_matrix_identity(p_matrix);
+    if (p_matrix == NULL) {
+        return;
+    }
+
+    sin_angle = sin(p_angle);
+    cos_angle = cos(p_angle);
+
+    p_matrix->m_values[1][1] = cos_angle;
+    p_matrix->m_values[1][2] = -sin_angle;
+    p_matrix->m_values[2][1] = sin_angle;
+    p_matrix->m_values[2][2] = cos_angle;
+}
+
+void agf_matrix_rotation_y(AGFMatrix4x4 *p_matrix, float p_angle)
+{
+    float sin_angle;
+    float cos_angle;
+
+    agf_matrix_identity(p_matrix);
+    if (p_matrix == NULL) {
+        return;
+    }
+
+    sin_angle = sin(p_angle);
+    cos_angle = cos(p_angle);
+
+    p_matrix->m_values[0][0] = cos_angle;
+    p_matrix->m_values[0][2] = sin_angle;
+    p_matrix->m_values[2][0] = -sin_angle;
+    p_matrix->m_values[2][2] = cos_angle;
+}
+
+void agf_matrix_rotation_z(AGFMatrix4x4 *p_matrix, float p_angle)
+{
+    float sin_angle;
+    float cos_angle;
+
+    agf_matrix_identity(p_matrix);
+    if (p_matrix == NULL) {
+        return;
+    }
+
+    sin_angle = sin(p_angle);
+    cos_angle = cos(p_angle);
+
+    p_matrix->m_values[0][0] = cos_angle;
+    p_matrix->m_values[0][1] = -sin_angle;
+    p_matrix->m_values[1][0] = sin_angle;
+    p_matrix->m_values[1][1] = cos_angle;
+}
+
+void agf_matrix_perspective(AGFMatrix4x4 *p_matrix, float p_focal, float p_aspect, float p_near, float p_far)
+{
+    agf_matrix_identity(p_matrix);
+    if (p_matrix == NULL || p_aspect == 0.0f || p_near == p_far) {
+        return;
+    }
+
+    p_matrix->m_values[0][0] = p_focal / p_aspect;
+    p_matrix->m_values[1][1] = p_focal;
+    p_matrix->m_values[2][2] = (p_far + p_near) / (p_near - p_far);
+    p_matrix->m_values[2][3] = (2.0f * p_far * p_near) / (p_near - p_far);
+    p_matrix->m_values[3][2] = -1.0f;
+    p_matrix->m_values[3][3] = 0.0f;
+}
+
+void agf_matrix_multiply(AGFMatrix4x4 *p_out, const AGFMatrix4x4 *p_a, const AGFMatrix4x4 *p_b)
+{
+    AGFMatrix4x4 result;
+    uint16_t row;
+    uint16_t col;
+    uint16_t i;
+
+    if (p_out == NULL || p_a == NULL || p_b == NULL) {
+        return;
+    }
+
+    for (row = 0; row < 4; row++) {
+        for (col = 0; col < 4; col++) {
+            result.m_values[row][col] = 0.0f;
+            for (i = 0; i < 4; i++) {
+                result.m_values[row][col] += p_a->m_values[row][i] * p_b->m_values[i][col];
+            }
+        }
+    }
+
+    *p_out = result;
+}
+
+AGFVector3f agf_matrix_transform_point(const AGFMatrix4x4 *p_matrix, AGFVector3f p_point)
+{
+    AGFVector3f result;
+    float w;
+
+    result = p_point;
+    if (p_matrix == NULL) {
+        return result;
+    }
+
+    result.m_x = p_matrix->m_values[0][0] * p_point.m_x + p_matrix->m_values[0][1] * p_point.m_y + p_matrix->m_values[0][2] * p_point.m_z + p_matrix->m_values[0][3];
+    result.m_y = p_matrix->m_values[1][0] * p_point.m_x + p_matrix->m_values[1][1] * p_point.m_y + p_matrix->m_values[1][2] * p_point.m_z + p_matrix->m_values[1][3];
+    result.m_z = p_matrix->m_values[2][0] * p_point.m_x + p_matrix->m_values[2][1] * p_point.m_y + p_matrix->m_values[2][2] * p_point.m_z + p_matrix->m_values[2][3];
+    w = p_matrix->m_values[3][0] * p_point.m_x + p_matrix->m_values[3][1] * p_point.m_y + p_matrix->m_values[3][2] * p_point.m_z + p_matrix->m_values[3][3];
+
+    if (w != 0.0f && w != 1.0f) {
+        result.m_x /= w;
+        result.m_y /= w;
+        result.m_z /= w;
+    }
+
+    return result;
+}
+
+AGFVector3f agf_matrix_transform_vector(const AGFMatrix4x4 *p_matrix, AGFVector3f p_vector)
+{
+    AGFVector3f result;
+
+    result = p_vector;
+    if (p_matrix == NULL) {
+        return result;
+    }
+
+    result.m_x = p_matrix->m_values[0][0] * p_vector.m_x + p_matrix->m_values[0][1] * p_vector.m_y + p_matrix->m_values[0][2] * p_vector.m_z;
+    result.m_y = p_matrix->m_values[1][0] * p_vector.m_x + p_matrix->m_values[1][1] * p_vector.m_y + p_matrix->m_values[1][2] * p_vector.m_z;
+    result.m_z = p_matrix->m_values[2][0] * p_vector.m_x + p_matrix->m_values[2][1] * p_vector.m_y + p_matrix->m_values[2][2] * p_vector.m_z;
+
+    return result;
 }
 
 AGFDepthBuffer *agf_depth_buffer_alloc_with_free(uint16_t p_width, uint16_t p_height, AGFFreeFunc p_free_func)
