@@ -96,16 +96,9 @@ static void waitVbl()
 	}
 }
 
-typedef struct CubeVertex
+static AGFVertex3f rotateCubeVector(AGFVertex3f vector, float sinY, float cosY, float sinX, float cosX, float sinZ, float cosZ)
 {
-    float m_x;
-    float m_y;
-    float m_z;
-} CubeVertex;
-
-static CubeVertex rotateCubeVector(CubeVertex vector, float sinY, float cosY, float sinX, float cosX, float sinZ, float cosZ)
-{
-    CubeVertex result;
+    AGFVertex3f result;
     float x1;
     float y1;
     float z1;
@@ -130,7 +123,7 @@ static CubeVertex rotateCubeVector(CubeVertex vector, float sinY, float cosY, fl
 
 static void drawRotatingCube(AGFImage *image, AGFDepthBuffer *depth, float angle)
 {
-    static const CubeVertex sourceVertices[8] = {
+    static const AGFVertex3f sourceVertices[8] = {
         {-1.0f, -1.0f, -1.0f},
         { 1.0f, -1.0f, -1.0f},
         { 1.0f,  1.0f, -1.0f},
@@ -148,7 +141,7 @@ static void drawRotatingCube(AGFImage *image, AGFDepthBuffer *depth, float angle
         {1, 5, 6, 2},
         {0, 3, 7, 4}
     };
-    static const CubeVertex faceNormals[6] = {
+    static const AGFVertex3f faceNormals[6] = {
         { 0.0f,  0.0f, -1.0f},
         { 0.0f,  0.0f,  1.0f},
         { 0.0f, -1.0f,  0.0f},
@@ -157,7 +150,7 @@ static void drawRotatingCube(AGFImage *image, AGFDepthBuffer *depth, float angle
         {-1.0f,  0.0f,  0.0f}
     };
     AGFVertex3i projected[8];
-    CubeVertex rotatedNormals[6];
+    AGFVertex3f rotatedNormals[6];
     AGFDirectionalLight light;
     float sinY = sin(angle);
     float cosY = cos(angle);
@@ -181,8 +174,8 @@ static void drawRotatingCube(AGFImage *image, AGFDepthBuffer *depth, float angle
     light.m_intensity = 196;
 
     for (i = 0; i < 8; i++) {
-        CubeVertex source;
-        CubeVertex rotated;
+        AGFVertex3f source;
+        AGFVertex3f rotated;
         float z3;
 
         source.m_x = sourceVertices[i].m_x * scale;
@@ -197,7 +190,7 @@ static void drawRotatingCube(AGFImage *image, AGFDepthBuffer *depth, float angle
     }
 
     for (face = 0; face < 6; face++) {
-        CubeVertex normal = rotateCubeVector(faceNormals[face], sinY, cosY, sinX, cosX, sinZ, cosZ);
+        AGFVertex3f normal = rotateCubeVector(faceNormals[face], sinY, cosY, sinX, cosX, sinZ, cosZ);
         rotatedNormals[face] = normal;
     }
 

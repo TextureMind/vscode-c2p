@@ -17,6 +17,13 @@ typedef struct AGFDepthBuffer
     AGFFreeFunc m_free_func;
 } AGFDepthBuffer;
 
+typedef struct AGFVertex3f
+{
+    float m_x;
+    float m_y;
+    float m_z;
+} AGFVertex3f;
+
 typedef struct AGFVertex3i
 {
     int16_t m_x;
