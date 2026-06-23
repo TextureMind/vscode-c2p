@@ -158,7 +158,149 @@ static void agf_build_cube_mesh(AGFMesh3D *p_mesh)
     p_mesh->m_free_func = NULL;
 }
 
-static void drawRotatingCube(AGFImage *p_image, AGFDepthBuffer *p_depth, float p_angle)
+#define AGF_TORUS_MAJOR_SEGMENTS 24
+#define AGF_TORUS_MINOR_SEGMENTS 16
+#define AGF_TORUS_NPOINTS (AGF_TORUS_MAJOR_SEGMENTS * AGF_TORUS_MINOR_SEGMENTS)
+#define AGF_TORUS_NQUADS AGF_TORUS_NPOINTS
+
+static void agf_mesh_release(AGFMesh3D *p_mesh)
+{
+    uint32_t slice_index;
+
+    if (p_mesh == NULL) {
+        return;
+    }
+
+    if (p_mesh->m_slices != NULL) {
+        for (slice_index = 0; slice_index < p_mesh->m_nslices; slice_index++) {
+            AGFMeshSlice3D *slice = &p_mesh->m_slices[slice_index];
+
+            if (slice->m_free_func != NULL) {
+                slice->m_free_func(slice->m_vertexAttributes);
+                slice->m_free_func(slice->m_triangles);
+                slice->m_free_func(slice->m_quads);
+            }
+        }
+
+        if (p_mesh->m_free_func != NULL) {
+            p_mesh->m_free_func(p_mesh->m_slices);
+        }
+    }
+
+    if (p_mesh->m_polygonHull.m_free_func != NULL) {
+        p_mesh->m_polygonHull.m_free_func(p_mesh->m_polygonHull.m_points);
+        p_mesh->m_polygonHull.m_free_func(p_mesh->m_polygonHull.m_triangles);
+        p_mesh->m_polygonHull.m_free_func(p_mesh->m_polygonHull.m_quads);
+    }
+
+    memset(p_mesh, 0, sizeof(AGFMesh3D));
+}
+
+static void agf_build_torus_mesh(AGFMesh3D *p_mesh)
+{
+    AGFVector3f *points;
+    AGFPolyQuad3D *hull_quads;
+    AGFVertexAttribute3f *vertex_attributes;
+    AGFMeshQuad3D *mesh_quads;
+    AGFMeshSlice3D *slices;
+    float major_radius = 2.0f;
+    float minor_radius = 0.78f;
+    uint32_t major;
+    uint32_t minor;
+
+    memset(p_mesh, 0, sizeof(AGFMesh3D));
+
+    points = (AGFVector3f *)malloc((uint32_t)AGF_TORUS_NPOINTS * sizeof(AGFVector3f));
+    hull_quads = (AGFPolyQuad3D *)malloc((uint32_t)AGF_TORUS_NQUADS * sizeof(AGFPolyQuad3D));
+    vertex_attributes = (AGFVertexAttribute3f *)malloc((uint32_t)AGF_TORUS_NPOINTS * sizeof(AGFVertexAttribute3f));
+    mesh_quads = (AGFMeshQuad3D *)malloc((uint32_t)AGF_TORUS_NQUADS * sizeof(AGFMeshQuad3D));
+    slices = (AGFMeshSlice3D *)malloc(sizeof(AGFMeshSlice3D));
+
+    if (slices != NULL) {
+        slices[0].m_vertexAttributes = vertex_attributes;
+        slices[0].m_nvertexAttributes = AGF_TORUS_NPOINTS;
+        slices[0].m_triangles = NULL;
+        slices[0].m_ntriangles = 0;
+        slices[0].m_quads = mesh_quads;
+        slices[0].m_nquads = AGF_TORUS_NQUADS;
+        slices[0].m_free_func = free;
+    }
+
+    p_mesh->m_polygonHull.m_points = points;
+    p_mesh->m_polygonHull.m_npoints = AGF_TORUS_NPOINTS;
+    p_mesh->m_polygonHull.m_triangles = NULL;
+    p_mesh->m_polygonHull.m_ntriangles = 0;
+    p_mesh->m_polygonHull.m_quads = hull_quads;
+    p_mesh->m_polygonHull.m_nquads = AGF_TORUS_NQUADS;
+    p_mesh->m_polygonHull.m_free_func = free;
+    p_mesh->m_slices = slices;
+    p_mesh->m_nslices = slices != NULL ? 1 : 0;
+    p_mesh->m_free_func = free;
+
+    if (points == NULL || hull_quads == NULL || vertex_attributes == NULL || mesh_quads == NULL || slices == NULL) {
+        if (slices == NULL) {
+            free(vertex_attributes);
+            free(mesh_quads);
+        }
+        agf_mesh_release(p_mesh);
+        return;
+    }
+
+    for (major = 0; major < AGF_TORUS_MAJOR_SEGMENTS; major++) {
+        float major_angle = ((float)major * 2.0f * 3.14159265f) / (float)AGF_TORUS_MAJOR_SEGMENTS;
+        float major_cos = cos(major_angle);
+        float major_sin = sin(major_angle);
+
+        for (minor = 0; minor < AGF_TORUS_MINOR_SEGMENTS; minor++) {
+            uint32_t point_index = major * AGF_TORUS_MINOR_SEGMENTS + minor;
+            float minor_angle = ((float)minor * 2.0f * 3.14159265f) / (float)AGF_TORUS_MINOR_SEGMENTS;
+            float minor_cos = cos(minor_angle);
+            float minor_sin = sin(minor_angle);
+            float ring_radius = major_radius + minor_radius * minor_cos;
+
+            points[point_index].m_x = ring_radius * major_cos;
+            points[point_index].m_y = minor_radius * minor_sin;
+            points[point_index].m_z = ring_radius * major_sin;
+
+            vertex_attributes[point_index].m_index = point_index;
+            vertex_attributes[point_index].m_normal.m_x = minor_cos * major_cos;
+            vertex_attributes[point_index].m_normal.m_y = minor_sin;
+            vertex_attributes[point_index].m_normal.m_z = minor_cos * major_sin;
+        }
+    }
+
+    for (major = 0; major < AGF_TORUS_MAJOR_SEGMENTS; major++) {
+        uint32_t next_major = (major + 1) % AGF_TORUS_MAJOR_SEGMENTS;
+
+        for (minor = 0; minor < AGF_TORUS_MINOR_SEGMENTS; minor++) {
+            uint32_t next_minor = (minor + 1) % AGF_TORUS_MINOR_SEGMENTS;
+            uint32_t quad_index = major * AGF_TORUS_MINOR_SEGMENTS + minor;
+            uint32_t p0 = major * AGF_TORUS_MINOR_SEGMENTS + minor;
+            uint32_t p1 = next_major * AGF_TORUS_MINOR_SEGMENTS + minor;
+            uint32_t p2 = next_major * AGF_TORUS_MINOR_SEGMENTS + next_minor;
+            uint32_t p3 = major * AGF_TORUS_MINOR_SEGMENTS + next_minor;
+            AGFVector3f normal;
+
+            normal.m_x = (vertex_attributes[p0].m_normal.m_x + vertex_attributes[p1].m_normal.m_x + vertex_attributes[p2].m_normal.m_x + vertex_attributes[p3].m_normal.m_x) * 0.25f;
+            normal.m_y = (vertex_attributes[p0].m_normal.m_y + vertex_attributes[p1].m_normal.m_y + vertex_attributes[p2].m_normal.m_y + vertex_attributes[p3].m_normal.m_y) * 0.25f;
+            normal.m_z = (vertex_attributes[p0].m_normal.m_z + vertex_attributes[p1].m_normal.m_z + vertex_attributes[p2].m_normal.m_z + vertex_attributes[p3].m_normal.m_z) * 0.25f;
+
+            hull_quads[quad_index].m_indices[0] = p0;
+            hull_quads[quad_index].m_indices[1] = p1;
+            hull_quads[quad_index].m_indices[2] = p2;
+            hull_quads[quad_index].m_indices[3] = p3;
+            hull_quads[quad_index].m_normal = normal;
+
+            mesh_quads[quad_index].m_indices[0] = p0;
+            mesh_quads[quad_index].m_indices[1] = p1;
+            mesh_quads[quad_index].m_indices[2] = p2;
+            mesh_quads[quad_index].m_indices[3] = p3;
+            mesh_quads[quad_index].m_polygonIndex = quad_index;
+        }
+    }
+}
+
+static void drawRotatingMesh(AGFImage *p_image, AGFDepthBuffer *p_depth, float p_angle, void (*p_build_mesh)(AGFMesh3D *p_mesh), float p_scale, float p_camera_z, float p_focal)
 {
     AGFMesh3D mesh;
     AGFMatrix4x4 scale_matrix;
@@ -168,17 +310,45 @@ static void drawRotatingCube(AGFImage *p_image, AGFDepthBuffer *p_depth, float p
     AGFMatrix4x4 model_matrix;
     AGFMatrix4x4 normal_matrix;
     AGFMatrix4x4 tmp_matrix;
-    AGFVector3f transformed_points[8];
-    AGFVector3f transformed_normals[24];
-    AGFVertex3i projected_points[8];
+    AGFVector3f *transformed_points = NULL;
+    AGFVector3f *transformed_normals = NULL;
+    AGFVertex3i *projected_points = NULL;
     AGFDirectionalLight light;
-    float scale = 80.0f;
-    float camera_z = 330.0f;
-    float focal = 190.0f;
+    uint32_t max_vertex_attributes = 0;
     uint32_t i;
     uint32_t slice_index;
 
-    agf_build_cube_mesh(&mesh);
+    memset(&mesh, 0, sizeof(AGFMesh3D));
+    p_build_mesh(&mesh);
+
+    if (mesh.m_polygonHull.m_points == NULL || mesh.m_polygonHull.m_npoints == 0 || (mesh.m_nslices > 0 && mesh.m_slices == NULL)) {
+        agf_mesh_release(&mesh);
+        return;
+    }
+
+    for (slice_index = 0; slice_index < mesh.m_nslices; slice_index++) {
+        AGFMeshSlice3D *slice = &mesh.m_slices[slice_index];
+        if (slice->m_nvertexAttributes > max_vertex_attributes) {
+            max_vertex_attributes = slice->m_nvertexAttributes;
+        }
+    }
+
+    if (max_vertex_attributes == 0) {
+        agf_mesh_release(&mesh);
+        return;
+    }
+
+    transformed_points = (AGFVector3f *)malloc(mesh.m_polygonHull.m_npoints * sizeof(AGFVector3f));
+    projected_points = (AGFVertex3i *)malloc(mesh.m_polygonHull.m_npoints * sizeof(AGFVertex3i));
+    transformed_normals = (AGFVector3f *)malloc(max_vertex_attributes * sizeof(AGFVector3f));
+
+    if (transformed_points == NULL || projected_points == NULL || transformed_normals == NULL) {
+        free(transformed_points);
+        free(projected_points);
+        free(transformed_normals);
+        agf_mesh_release(&mesh);
+        return;
+    }
 
     memset(p_image->m_data, 0, agf_image_size(p_image));
     agf_depth_buffer_clear(p_depth, AGF_DEPTH_MAX);
@@ -189,7 +359,7 @@ static void drawRotatingCube(AGFImage *p_image, AGFDepthBuffer *p_depth, float p
     light.m_ambient = 42;
     light.m_intensity = 196;
 
-    agf_matrix_scale(&scale_matrix, scale, scale, scale);
+    agf_matrix_scale(&scale_matrix, p_scale, p_scale, p_scale);
     agf_matrix_rotation_y(&rotation_y, p_angle);
     agf_matrix_rotation_x(&rotation_x, p_angle * 0.73f);
     agf_matrix_rotation_z(&rotation_z, p_angle * 0.31f);
@@ -199,7 +369,7 @@ static void drawRotatingCube(AGFImage *p_image, AGFDepthBuffer *p_depth, float p
 
     for (i = 0; i < mesh.m_polygonHull.m_npoints; i++) {
         transformed_points[i] = agf_matrix_transform_point(&model_matrix, mesh.m_polygonHull.m_points[i]);
-        agf_project_vertex(&transformed_points[i], &projected_points[i], p_image->m_width, p_image->m_height, camera_z, focal);
+        agf_project_vertex(&transformed_points[i], &projected_points[i], p_image->m_width, p_image->m_height, p_camera_z, p_focal);
     }
 
     for (slice_index = 0; slice_index < mesh.m_nslices; slice_index++) {
@@ -223,8 +393,18 @@ static void drawRotatingCube(AGFImage *p_image, AGFDepthBuffer *p_depth, float p
 
             for (vertex = 0; vertex < 4; vertex++) {
                 uint32_t vertex_attribute_index = quad->m_indices[vertex];
-                AGFVertexAttribute3f *vertex_attribute = &slice->m_vertexAttributes[vertex_attribute_index];
-                uint32_t point_index = vertex_attribute->m_index;
+                AGFVertexAttribute3f *vertex_attribute;
+                uint32_t point_index;
+
+                if (vertex_attribute_index >= slice->m_nvertexAttributes) {
+                    break;
+                }
+
+                vertex_attribute = &slice->m_vertexAttributes[vertex_attribute_index];
+                point_index = vertex_attribute->m_index;
+                if (point_index >= mesh.m_polygonHull.m_npoints) {
+                    break;
+                }
 
                 polygon[vertex].m_x = projected_points[point_index].m_x;
                 polygon[vertex].m_y = projected_points[point_index].m_y;
@@ -232,6 +412,10 @@ static void drawRotatingCube(AGFImage *p_image, AGFDepthBuffer *p_depth, float p
                 polygon[vertex].m_nx = (int16_t)(transformed_normals[vertex_attribute_index].m_x * (float)AGF_NORMAL_SCALE);
                 polygon[vertex].m_ny = (int16_t)(transformed_normals[vertex_attribute_index].m_y * (float)AGF_NORMAL_SCALE);
                 polygon[vertex].m_nz = (int16_t)(transformed_normals[vertex_attribute_index].m_z * (float)AGF_NORMAL_SCALE);
+            }
+
+            if (vertex != 4) {
+                continue;
             }
 
             ax = (int32_t)polygon[1].m_x - polygon[0].m_x;
@@ -245,6 +429,21 @@ static void drawRotatingCube(AGFImage *p_image, AGFDepthBuffer *p_depth, float p
             }
         }
     }
+
+    free(transformed_points);
+    free(projected_points);
+    free(transformed_normals);
+    agf_mesh_release(&mesh);
+}
+
+static void drawRotatingCube(AGFImage *p_image, AGFDepthBuffer *p_depth, float p_angle)
+{
+    drawRotatingMesh(p_image, p_depth, p_angle, agf_build_cube_mesh, 80.0f, 330.0f, 190.0f);
+}
+
+static void drawRotatingTorus(AGFImage *p_image, AGFDepthBuffer *p_depth, float p_angle)
+{
+    drawRotatingMesh(p_image, p_depth, p_angle, agf_build_torus_mesh, 70.0f, 360.0f, 190.0f);
 }
 
 // We need to declare the libraries as "externally_visible" since we are using the option -fwhole-program in the Makefile
@@ -559,8 +758,8 @@ int main(int argc, char **argv)
             agf_texture_animation_render(textureAnimation, textureImage);
         }
 
-        if (example == 2) { // Rotating depth buffered cube
-            drawRotatingCube(screenImage, depthBuffer, angle);
+        if (example == 2) { // Rotating depth buffered torus
+            drawRotatingTorus(screenImage, depthBuffer, angle);
         } else if (example == 0) { // Image rotation with bilinear filtering
             scale = 1.0f - ((cos(angle) + 1.0f) / 2.25f);
 
