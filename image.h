@@ -9,12 +9,12 @@ typedef void (*AGFFreeFunc)(void *ptr);
 
 typedef struct AGFImage
 {
-    uint16_t width;
-    uint16_t height;
-    uint16_t depth;
-    uint16_t stride;
-    uint8_t *data;
-    AGFFreeFunc free_func;
+    uint16_t m_width;
+    uint16_t m_height;
+    uint16_t m_depth;
+    uint16_t m_stride;
+    uint8_t *m_data;
+    AGFFreeFunc m_free_func;
 } AGFImage;
 
 void agf_image_free(AGFImage *image);
@@ -25,7 +25,7 @@ void agf_image_free(AGFImage *image);
 #define agf_image_alloc_8(width, height) \
     agf_image_alloc((width), (height), AGF_IMAGE_DEPTH_8)
 
-uint32_t agf_image_size(const AGFImage *image);
-AGFImage *agf_image_alloc_with_free(uint16_t width, uint16_t height, uint16_t depth, AGFFreeFunc free_func);
+uint32_t agf_image_size(const AGFImage *p_image);
+AGFImage *agf_image_alloc_with_free(uint16_t p_width, uint16_t p_height, uint16_t p_depth, AGFFreeFunc p_free_func);
 
 #endif

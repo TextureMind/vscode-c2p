@@ -96,12 +96,11 @@ static void waitVbl()
 	}
 }
 
-
 typedef struct CubeVertex
 {
-    float x;
-    float y;
-    float z;
+    float m_x;
+    float m_y;
+    float m_z;
 } CubeVertex;
 
 static CubeVertex rotateCubeVector(CubeVertex vector, float sinY, float cosY, float sinX, float cosX, float sinZ, float cosZ)
@@ -114,17 +113,17 @@ static CubeVertex rotateCubeVector(CubeVertex vector, float sinY, float cosY, fl
     float y2;
     float z2;
 
-    x1 = vector.x * cosY + vector.z * sinY;
-    y1 = vector.y;
-    z1 = -vector.x * sinY + vector.z * cosY;
+    x1 = vector.m_x * cosY + vector.m_z * sinY;
+    y1 = vector.m_y;
+    z1 = -vector.m_x * sinY + vector.m_z * cosY;
 
     x2 = x1;
     y2 = y1 * cosX - z1 * sinX;
     z2 = y1 * sinX + z1 * cosX;
 
-    result.x = x2 * cosZ - y2 * sinZ;
-    result.y = x2 * sinZ + y2 * cosZ;
-    result.z = z2;
+    result.m_x = x2 * cosZ - y2 * sinZ;
+    result.m_y = x2 * sinZ + y2 * cosZ;
+    result.m_z = z2;
 
     return result;
 }
@@ -172,29 +171,29 @@ static void drawRotatingCube(AGFImage *image, AGFDepthBuffer *depth, float angle
     int i;
     int face;
 
-    memset(image->data, 0, agf_image_size(image));
+    memset(image->m_data, 0, agf_image_size(image));
     agf_depth_buffer_clear(depth, AGF_DEPTH_MAX);
 
-    light.nx = -6000;
-    light.ny = -9000;
-    light.nz = -12000;
-    light.ambient = 42;
-    light.intensity = 196;
+    light.m_nx = -6000;
+    light.m_ny = -9000;
+    light.m_nz = -12000;
+    light.m_ambient = 42;
+    light.m_intensity = 196;
 
     for (i = 0; i < 8; i++) {
         CubeVertex source;
         CubeVertex rotated;
         float z3;
 
-        source.x = sourceVertices[i].x * scale;
-        source.y = sourceVertices[i].y * scale;
-        source.z = sourceVertices[i].z * scale;
+        source.m_x = sourceVertices[i].m_x * scale;
+        source.m_y = sourceVertices[i].m_y * scale;
+        source.m_z = sourceVertices[i].m_z * scale;
         rotated = rotateCubeVector(source, sinY, cosY, sinX, cosX, sinZ, cosZ);
-        z3 = rotated.z + camera_z;
+        z3 = rotated.m_z + camera_z;
 
-        projected[i].x = (int16_t)((float)(image->width / 2) + (rotated.x * focal) / z3);
-        projected[i].y = (int16_t)((float)(image->height / 2) + (rotated.y * focal) / z3);
-        projected[i].z = (uint32_t)(z3 * 256.0f);
+        projected[i].m_x = (int16_t)((float)(image->m_width / 2) + (rotated.m_x * focal) / z3);
+        projected[i].m_y = (int16_t)((float)(image->m_height / 2) + (rotated.m_y * focal) / z3);
+        projected[i].m_z = (uint32_t)(z3 * 256.0f);
     }
 
     for (face = 0; face < 6; face++) {
@@ -213,18 +212,18 @@ static void drawRotatingCube(AGFImage *image, AGFDepthBuffer *depth, float angle
 
         for (vertex = 0; vertex < 4; vertex++) {
             uint8_t index = faces[face][vertex];
-            polygon[vertex].x = projected[index].x;
-            polygon[vertex].y = projected[index].y;
-            polygon[vertex].z = projected[index].z;
-            polygon[vertex].nx = (int16_t)(rotatedNormals[face].x * (float)AGF_NORMAL_SCALE);
-            polygon[vertex].ny = (int16_t)(rotatedNormals[face].y * (float)AGF_NORMAL_SCALE);
-            polygon[vertex].nz = (int16_t)(rotatedNormals[face].z * (float)AGF_NORMAL_SCALE);
+            polygon[vertex].m_x = projected[index].m_x;
+            polygon[vertex].m_y = projected[index].m_y;
+            polygon[vertex].m_z = projected[index].m_z;
+            polygon[vertex].m_nx = (int16_t)(rotatedNormals[face].m_x * (float)AGF_NORMAL_SCALE);
+            polygon[vertex].m_ny = (int16_t)(rotatedNormals[face].m_y * (float)AGF_NORMAL_SCALE);
+            polygon[vertex].m_nz = (int16_t)(rotatedNormals[face].m_z * (float)AGF_NORMAL_SCALE);
         }
 
-        ax = (int32_t)polygon[1].x - polygon[0].x;
-        ay = (int32_t)polygon[1].y - polygon[0].y;
-        bx = (int32_t)polygon[2].x - polygon[0].x;
-        by = (int32_t)polygon[2].y - polygon[0].y;
+        ax = (int32_t)polygon[1].m_x - polygon[0].m_x;
+        ay = (int32_t)polygon[1].m_y - polygon[0].m_y;
+        bx = (int32_t)polygon[2].m_x - polygon[0].m_x;
+        by = (int32_t)polygon[2].m_y - polygon[0].m_y;
         winding = ax * by - ay * bx;
 
         if (winding > 0) {
@@ -426,10 +425,10 @@ __attribute__((used)) __attribute__((section(".text.unlikely"))) void _start(int
 
 int main(int argc, char **argv) 
 {
-    printf("Thanks for running Floor Rotation with bilinear filtering example\n");
-    printf("Programmed by Gianpaolo Ingegneri / TextureMind in 2007 with StormC 3.0\n");
-    printf("and reworked with Visual Studio Code (Abyss / Job extension) in 2025\n");
-    printf("Original Chunky To Planar algorithm coded in 1994 by Morten Eriksen\n\n");
+    printf("Thanks for running Amiga Graphics Framework example\n");
+    printf("Programmed by Gianpaolo Ingegneri / TextureMind. Started from a small example\n");
+    printf("created in 2007 with StormC 3.0 and continued in 2026 with Visual Studio Code\n");
+    printf("(Abyss / Job extension). C2P algorithm coded in 1998 by Kalms\n\n");
 
     struct Screen *scr;
 
@@ -479,9 +478,9 @@ int main(int argc, char **argv)
 
     c2p.startX = 0;
     c2p.startY = 0;
-    c2p.width = screenImage->width;
-    c2p.height = screenImage->height;
-    c2p.ChunkyBuffer = screenImage->data;
+    c2p.width = screenImage->m_width;
+    c2p.height = screenImage->m_height;
+    c2p.ChunkyBuffer = screenImage->m_data;
     c2p.bmap = scr->RastPort.BitMap;
 #endif
     // Load image from file
@@ -490,14 +489,14 @@ int main(int argc, char **argv)
     stream = fopen("floortexture.raw", "rb");
     if (stream == NULL) {
         printf("Unable to open floortexture.raw file. Generate animated blobs texture instead\n");
-        textureAnimation = agf_texture_animation_alloc(AGF_TEXTURE_ANIMATION_BLOBS, textureImage->width, textureImage->height, 8);
+        textureAnimation = agf_texture_animation_alloc(AGF_TEXTURE_ANIMATION_BLOBS, textureImage->m_width, textureImage->m_height, 8);
         if (textureAnimation == NULL) {
             agf_texture_generate_blobs(textureImage, 8);
         } else {
             agf_texture_animation_render(textureAnimation, textureImage);
         }
     } else {
-        fread(textureImage->data, agf_image_size(textureImage), 1, stream);
+        fread(textureImage->m_data, agf_image_size(textureImage), 1, stream);
         fclose(stream);
     }
 
@@ -514,8 +513,8 @@ int main(int argc, char **argv)
 
     unsigned char *c_scan;
 
-    int width = screenImage->width;
-    int height = screenImage->height;
+    int width = screenImage->m_width;
+    int height = screenImage->m_height;
     float center = 256;
     float py = 256;
 
@@ -533,7 +532,7 @@ int main(int argc, char **argv)
         if (mouseRight() && mouseRightDown == 0) {
             example = (example + 1) % 3;
             if (example == 1) {
-                memset(screenImage->data, 0, agf_image_size(screenImage));
+                memset(screenImage->m_data, 0, agf_image_size(screenImage));
             }
 
             mouseRightDown = 1;
@@ -559,16 +558,16 @@ int main(int argc, char **argv)
                 xlong = xc;
                 ylong = yc;
 
-                c_scan = &screenImage->data[y * screenImage->stride];
+                c_scan = &screenImage->m_data[y * screenImage->m_stride];
 
                 for (x = 0; x < width; x++) {
                     tx = xlong >> 16;
                     ty = ylong >> 16;
 
-                    col1 = textureImage->data[((tx + 0) & 0xFF) + ((ty + 0) & 0xFF) * textureImage->stride];
-                    col2 = textureImage->data[((tx + 1) & 0xFF) + ((ty + 0) & 0xFF) * textureImage->stride];
-                    col3 = textureImage->data[((tx + 0) & 0xFF) + ((ty + 1) & 0xFF) * textureImage->stride];
-                    col4 = textureImage->data[((tx + 1) & 0xFF) + ((ty + 1) & 0xFF) * textureImage->stride];
+                    col1 = textureImage->m_data[((tx + 0) & 0xFF) + ((ty + 0) & 0xFF) * textureImage->m_stride];
+                    col2 = textureImage->m_data[((tx + 1) & 0xFF) + ((ty + 0) & 0xFF) * textureImage->m_stride];
+                    col3 = textureImage->m_data[((tx + 0) & 0xFF) + ((ty + 1) & 0xFF) * textureImage->m_stride];
+                    col4 = textureImage->m_data[((tx + 1) & 0xFF) + ((ty + 1) & 0xFF) * textureImage->m_stride];
 
                     u = xlong & 0x0000FFFF;
                     v = ylong & 0x0000FFFF;
@@ -613,16 +612,16 @@ int main(int argc, char **argv)
                 xlong = (long)(hx * 65536.0f);
                 ylong = (long)(hy * 65536.0f);
 
-                c_scan = &screenImage->data[y * screenImage->stride];
+                c_scan = &screenImage->m_data[y * screenImage->m_stride];
 
                 for (x = 0; x < width; x++) {
                     tx = xlong >> 16;
                     ty = ylong >> 16;
 
-                    col1 = textureImage->data[((tx + 0) & 0xFF) + ((ty + 0) & 0xFF) * textureImage->stride];
-                    col2 = textureImage->data[((tx + 1) & 0xFF) + ((ty + 0) & 0xFF) * textureImage->stride];
-                    col3 = textureImage->data[((tx + 0) & 0xFF) + ((ty + 1) & 0xFF) * textureImage->stride];
-                    col4 = textureImage->data[((tx + 1) & 0xFF) + ((ty + 1) & 0xFF) * textureImage->stride];
+                    col1 = textureImage->m_data[((tx + 0) & 0xFF) + ((ty + 0) & 0xFF) * textureImage->m_stride];
+                    col2 = textureImage->m_data[((tx + 1) & 0xFF) + ((ty + 0) & 0xFF) * textureImage->m_stride];
+                    col3 = textureImage->m_data[((tx + 0) & 0xFF) + ((ty + 1) & 0xFF) * textureImage->m_stride];
+                    col4 = textureImage->m_data[((tx + 1) & 0xFF) + ((ty + 1) & 0xFF) * textureImage->m_stride];
 
                     u = xlong & 0x0000FFFF;
                     v = ylong & 0x0000FFFF;
@@ -640,8 +639,8 @@ int main(int argc, char **argv)
         }
 
 #ifdef USE_C2P_KALMS
-        chunkyToPlanar2Init(screenImage->width, screenImage->height, 0);
-        chunkyToPlanar2(screenImage->data, scr->RastPort.BitMap->Planes[0]);
+        chunkyToPlanar2Init(screenImage->m_width, screenImage->m_height, 0);
+        chunkyToPlanar2(screenImage->m_data, scr->RastPort.BitMap->Planes[0]);
 #else
         chunkyToPlanar(&c2p);
 #endif

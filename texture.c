@@ -5,10 +5,10 @@
 
 typedef struct AGFRect
 {
-    int32_t left;
-    int32_t top;
-    int32_t right;
-    int32_t bottom;
+    int32_t m_left;
+    int32_t m_top;
+    int32_t m_right;
+    int32_t m_bottom;
 } AGFRect;
 
 static uint8_t agf_sqrt_table[65536];
@@ -49,12 +49,12 @@ static uint8_t agf_sqrt_u16(uint32_t value)
     return agf_sqrt_table[value];
 }
 
-static int agf_texture_is_mono8(const AGFImage *image)
+static int agf_texture_is_mono8(const AGFImage *p_image)
 {
-    return image != NULL && image->data != NULL && image->depth == AGF_IMAGE_DEPTH_8;
+    return p_image != NULL && p_image->m_data != NULL && p_image->m_depth == AGF_IMAGE_DEPTH_8;
 }
 
-int agf_texture_generate_cone(AGFImage *image)
+int agf_texture_generate_cone(AGFImage *p_image)
 {
     int32_t x;
     int32_t y;
@@ -64,12 +64,12 @@ int agf_texture_generate_cone(AGFImage *image)
     int32_t height;
     uint32_t radius_scale;
 
-    if (!agf_texture_is_mono8(image)) {
+    if (!agf_texture_is_mono8(p_image)) {
         return 0;
     }
 
-    width = image->width;
-    height = image->height;
+    width = p_image->m_width;
+    height = p_image->m_height;
     xcenter = width / 2;
     ycenter = height / 2;
     radius_scale = 512;
@@ -77,7 +77,7 @@ int agf_texture_generate_cone(AGFImage *image)
     agf_texture_init_sqrt_table();
 
     for (y = 0; y < height; y++) {
-        uint8_t *dst = &image->data[y * image->stride];
+        uint8_t *dst = &p_image->m_data[y * p_image->m_stride];
 
         for (x = 0; x < width; x++) {
             int32_t dx = x - xcenter;
@@ -96,7 +96,7 @@ int agf_texture_generate_cone(AGFImage *image)
     return 1;
 }
 
-int agf_texture_generate_sphere(AGFImage *image)
+int agf_texture_generate_sphere(AGFImage *p_image)
 {
     int32_t x;
     int32_t y;
@@ -106,12 +106,12 @@ int agf_texture_generate_sphere(AGFImage *image)
     int32_t height;
     uint32_t radius_scale;
 
-    if (!agf_texture_is_mono8(image)) {
+    if (!agf_texture_is_mono8(p_image)) {
         return 0;
     }
 
-    width = image->width;
-    height = image->height;
+    width = p_image->m_width;
+    height = p_image->m_height;
     xcenter = width / 2;
     ycenter = height / 2;
     radius_scale = 512;
@@ -119,7 +119,7 @@ int agf_texture_generate_sphere(AGFImage *image)
     agf_texture_init_sqrt_table();
 
     for (y = 0; y < height; y++) {
-        uint8_t *dst = &image->data[y * image->stride];
+        uint8_t *dst = &p_image->m_data[y * p_image->m_stride];
 
         for (x = 0; x < width; x++) {
             int32_t dx = x - xcenter;
@@ -141,7 +141,7 @@ int agf_texture_generate_sphere(AGFImage *image)
     return 1;
 }
 
-void agf_texture_blit_lump(AGFImage *dst, const AGFImage *src, float xpos, float ypos)
+void agf_texture_blit_lump(AGFImage *p_dst, const AGFImage *p_src, float p_xpos, float p_ypos)
 {
     AGFRect dst_rect;
     int32_t x;
@@ -151,42 +151,42 @@ void agf_texture_blit_lump(AGFImage *dst, const AGFImage *src, float xpos, float
     const uint8_t *src_scan;
     uint8_t *dst_scan;
 
-    if (!agf_texture_is_mono8(dst) || !agf_texture_is_mono8(src)) {
+    if (!agf_texture_is_mono8(p_dst) || !agf_texture_is_mono8(p_src)) {
         return;
     }
 
-    dst_rect.left = (int32_t)xpos;
-    dst_rect.top = (int32_t)ypos;
-    dst_rect.right = dst_rect.left + src->width;
-    dst_rect.bottom = dst_rect.top + src->height;
+    dst_rect.m_left = (int32_t)p_xpos;
+    dst_rect.m_top = (int32_t)p_ypos;
+    dst_rect.m_right = dst_rect.m_left + p_src->m_width;
+    dst_rect.m_bottom = dst_rect.m_top + p_src->m_height;
 
-    src_scan = src->data;
+    src_scan = p_src->m_data;
 
-    if (dst_rect.left < 0) {
-        src_scan -= dst_rect.left;
-        dst_rect.left = 0;
+    if (dst_rect.m_left < 0) {
+        src_scan -= dst_rect.m_left;
+        dst_rect.m_left = 0;
     }
 
-    if (dst_rect.top < 0) {
-        src_scan -= dst_rect.top * src->stride;
-        dst_rect.top = 0;
+    if (dst_rect.m_top < 0) {
+        src_scan -= dst_rect.m_top * p_src->m_stride;
+        dst_rect.m_top = 0;
     }
 
-    if (dst_rect.right > dst->width) {
-        dst_rect.right = dst->width;
+    if (dst_rect.m_right > p_dst->m_width) {
+        dst_rect.m_right = p_dst->m_width;
     }
 
-    if (dst_rect.bottom > dst->height) {
-        dst_rect.bottom = dst->height;
+    if (dst_rect.m_bottom > p_dst->m_height) {
+        dst_rect.m_bottom = p_dst->m_height;
     }
 
-    width = dst_rect.right - dst_rect.left;
-    height = dst_rect.bottom - dst_rect.top;
+    width = dst_rect.m_right - dst_rect.m_left;
+    height = dst_rect.m_bottom - dst_rect.m_top;
     if (width <= 0 || height <= 0) {
         return;
     }
 
-    dst_scan = &dst->data[dst_rect.left + dst_rect.top * dst->stride];
+    dst_scan = &p_dst->m_data[dst_rect.m_left + dst_rect.m_top * p_dst->m_stride];
 
     for (y = 0; y < height; y++) {
         const uint8_t *src_data = src_scan;
@@ -204,12 +204,12 @@ void agf_texture_blit_lump(AGFImage *dst, const AGFImage *src, float xpos, float
             src_data++;
         }
 
-        src_scan += src->stride;
-        dst_scan += dst->stride;
+        src_scan += p_src->m_stride;
+        dst_scan += p_dst->m_stride;
     }
 }
 
-void agf_texture_blit_blob(AGFImage *dst, const AGFImage *src, float xpos, float ypos)
+void agf_texture_blit_blob(AGFImage *p_dst, const AGFImage *p_src, float p_xpos, float p_ypos)
 {
     AGFRect dst_rect;
     int32_t x;
@@ -219,42 +219,42 @@ void agf_texture_blit_blob(AGFImage *dst, const AGFImage *src, float xpos, float
     const uint8_t *src_scan;
     uint8_t *dst_scan;
 
-    if (!agf_texture_is_mono8(dst) || !agf_texture_is_mono8(src)) {
+    if (!agf_texture_is_mono8(p_dst) || !agf_texture_is_mono8(p_src)) {
         return;
     }
 
-    dst_rect.left = (int32_t)xpos;
-    dst_rect.top = (int32_t)ypos;
-    dst_rect.right = dst_rect.left + src->width;
-    dst_rect.bottom = dst_rect.top + src->height;
+    dst_rect.m_left = (int32_t)p_xpos;
+    dst_rect.m_top = (int32_t)p_ypos;
+    dst_rect.m_right = dst_rect.m_left + p_src->m_width;
+    dst_rect.m_bottom = dst_rect.m_top + p_src->m_height;
 
-    src_scan = src->data;
+    src_scan = p_src->m_data;
 
-    if (dst_rect.left < 0) {
-        src_scan -= dst_rect.left;
-        dst_rect.left = 0;
+    if (dst_rect.m_left < 0) {
+        src_scan -= dst_rect.m_left;
+        dst_rect.m_left = 0;
     }
 
-    if (dst_rect.top < 0) {
-        src_scan -= dst_rect.top * src->stride;
-        dst_rect.top = 0;
+    if (dst_rect.m_top < 0) {
+        src_scan -= dst_rect.m_top * p_src->m_stride;
+        dst_rect.m_top = 0;
     }
 
-    if (dst_rect.right > dst->width) {
-        dst_rect.right = dst->width;
+    if (dst_rect.m_right > p_dst->m_width) {
+        dst_rect.m_right = p_dst->m_width;
     }
 
-    if (dst_rect.bottom > dst->height) {
-        dst_rect.bottom = dst->height;
+    if (dst_rect.m_bottom > p_dst->m_height) {
+        dst_rect.m_bottom = p_dst->m_height;
     }
 
-    width = dst_rect.right - dst_rect.left;
-    height = dst_rect.bottom - dst_rect.top;
+    width = dst_rect.m_right - dst_rect.m_left;
+    height = dst_rect.m_bottom - dst_rect.m_top;
     if (width <= 0 || height <= 0) {
         return;
     }
 
-    dst_scan = &dst->data[dst_rect.left + dst_rect.top * dst->stride];
+    dst_scan = &p_dst->m_data[dst_rect.m_left + dst_rect.m_top * p_dst->m_stride];
 
     for (y = 0; y < height; y++) {
         const uint8_t *src_data = src_scan;
@@ -273,56 +273,56 @@ void agf_texture_blit_blob(AGFImage *dst, const AGFImage *src, float xpos, float
             src_data++;
         }
 
-        src_scan += src->stride;
-        dst_scan += dst->stride;
+        src_scan += p_src->m_stride;
+        dst_scan += p_dst->m_stride;
     }
 }
 
-static void agf_texture_blit_tiled_lump(AGFImage *dst, const AGFImage *src, float xpos, float ypos)
+static void agf_texture_blit_tiled_lump(AGFImage *p_dst, const AGFImage *p_src, float p_xpos, float p_ypos)
 {
-    float width = (float)dst->width;
-    float height = (float)dst->height;
+    float width = (float)p_dst->m_width;
+    float height = (float)p_dst->m_height;
 
-    agf_texture_blit_lump(dst, src, xpos, ypos);
-    agf_texture_blit_lump(dst, src, xpos - width, ypos + height);
-    agf_texture_blit_lump(dst, src, xpos - width, ypos);
-    agf_texture_blit_lump(dst, src, xpos - width, ypos - height);
-    agf_texture_blit_lump(dst, src, xpos, ypos - height);
-    agf_texture_blit_lump(dst, src, xpos + width, ypos - height);
-    agf_texture_blit_lump(dst, src, xpos + width, ypos);
-    agf_texture_blit_lump(dst, src, xpos, ypos + height);
-    agf_texture_blit_lump(dst, src, xpos + width, ypos + height);
+    agf_texture_blit_lump(p_dst, p_src, p_xpos, p_ypos);
+    agf_texture_blit_lump(p_dst, p_src, p_xpos - width, p_ypos + height);
+    agf_texture_blit_lump(p_dst, p_src, p_xpos - width, p_ypos);
+    agf_texture_blit_lump(p_dst, p_src, p_xpos - width, p_ypos - height);
+    agf_texture_blit_lump(p_dst, p_src, p_xpos, p_ypos - height);
+    agf_texture_blit_lump(p_dst, p_src, p_xpos + width, p_ypos - height);
+    agf_texture_blit_lump(p_dst, p_src, p_xpos + width, p_ypos);
+    agf_texture_blit_lump(p_dst, p_src, p_xpos, p_ypos + height);
+    agf_texture_blit_lump(p_dst, p_src, p_xpos + width, p_ypos + height);
 }
 
-static void agf_texture_blit_tiled_blob(AGFImage *dst, const AGFImage *src, float xpos, float ypos)
+static void agf_texture_blit_tiled_blob(AGFImage *p_dst, const AGFImage *p_src, float p_xpos, float p_ypos)
 {
-    float width = (float)dst->width;
-    float height = (float)dst->height;
+    float width = (float)p_dst->m_width;
+    float height = (float)p_dst->m_height;
 
-    agf_texture_blit_blob(dst, src, xpos, ypos);
-    agf_texture_blit_blob(dst, src, xpos - width, ypos + height);
-    agf_texture_blit_blob(dst, src, xpos - width, ypos);
-    agf_texture_blit_blob(dst, src, xpos - width, ypos - height);
-    agf_texture_blit_blob(dst, src, xpos, ypos - height);
-    agf_texture_blit_blob(dst, src, xpos + width, ypos - height);
-    agf_texture_blit_blob(dst, src, xpos + width, ypos);
-    agf_texture_blit_blob(dst, src, xpos, ypos + height);
-    agf_texture_blit_blob(dst, src, xpos + width, ypos + height);
+    agf_texture_blit_blob(p_dst, p_src, p_xpos, p_ypos);
+    agf_texture_blit_blob(p_dst, p_src, p_xpos - width, p_ypos + height);
+    agf_texture_blit_blob(p_dst, p_src, p_xpos - width, p_ypos);
+    agf_texture_blit_blob(p_dst, p_src, p_xpos - width, p_ypos - height);
+    agf_texture_blit_blob(p_dst, p_src, p_xpos, p_ypos - height);
+    agf_texture_blit_blob(p_dst, p_src, p_xpos + width, p_ypos - height);
+    agf_texture_blit_blob(p_dst, p_src, p_xpos + width, p_ypos);
+    agf_texture_blit_blob(p_dst, p_src, p_xpos, p_ypos + height);
+    agf_texture_blit_blob(p_dst, p_src, p_xpos + width, p_ypos + height);
 }
 
-int agf_texture_generate_lumps(AGFImage *image, uint16_t nparticles)
+int agf_texture_generate_lumps(AGFImage *p_image, uint16_t p_nparticles)
 {
     uint16_t n;
     uint16_t sphere_width;
     uint16_t sphere_height;
     AGFImage *sphere;
 
-    if (!agf_texture_is_mono8(image)) {
+    if (!agf_texture_is_mono8(p_image)) {
         return 0;
     }
 
-    sphere_width = (uint16_t)((float)image->width * 0.2f);
-    sphere_height = (uint16_t)((float)image->height * 0.2f);
+    sphere_width = (uint16_t)((float)p_image->m_width * 0.2f);
+    sphere_height = (uint16_t)((float)p_image->m_height * 0.2f);
     if (sphere_width == 0) {
         sphere_width = 1;
     }
@@ -340,12 +340,12 @@ int agf_texture_generate_lumps(AGFImage *image, uint16_t nparticles)
         return 0;
     }
 
-    memset(image->data, 0, agf_image_size(image));
+    memset(p_image->m_data, 0, agf_image_size(p_image));
 
-    for (n = 0; n < nparticles; n++) {
-        float xpos = (float)((uint32_t)rand() % image->width);
-        float ypos = (float)((uint32_t)rand() % image->height);
-        agf_texture_blit_tiled_lump(image, sphere, xpos, ypos);
+    for (n = 0; n < p_nparticles; n++) {
+        float xpos = (float)((uint32_t)rand() % p_image->m_width);
+        float ypos = (float)((uint32_t)rand() % p_image->m_height);
+        agf_texture_blit_tiled_lump(p_image, sphere, xpos, ypos);
     }
 
     agf_image_free(sphere);
@@ -353,19 +353,19 @@ int agf_texture_generate_lumps(AGFImage *image, uint16_t nparticles)
     return 1;
 }
 
-int agf_texture_generate_blobs(AGFImage *image, uint16_t nparticles)
+int agf_texture_generate_blobs(AGFImage *p_image, uint16_t p_nparticles)
 {
     uint16_t n;
     uint16_t cone_width;
     uint16_t cone_height;
     AGFImage *cone;
 
-    if (!agf_texture_is_mono8(image)) {
+    if (!agf_texture_is_mono8(p_image)) {
         return 0;
     }
 
-    cone_width = (uint16_t)((float)image->width * 0.6f);
-    cone_height = (uint16_t)((float)image->height * 0.6f);
+    cone_width = (uint16_t)((float)p_image->m_width * 0.6f);
+    cone_height = (uint16_t)((float)p_image->m_height * 0.6f);
     if (cone_width == 0) {
         cone_width = 1;
     }
@@ -383,12 +383,12 @@ int agf_texture_generate_blobs(AGFImage *image, uint16_t nparticles)
         return 0;
     }
 
-    memset(image->data, 0, agf_image_size(image));
+    memset(p_image->m_data, 0, agf_image_size(p_image));
 
-    for (n = 0; n < nparticles; n++) {
-        float xpos = (float)((uint32_t)rand() % image->width);
-        float ypos = (float)((uint32_t)rand() % image->height);
-        agf_texture_blit_tiled_blob(image, cone, xpos, ypos);
+    for (n = 0; n < p_nparticles; n++) {
+        float xpos = (float)((uint32_t)rand() % p_image->m_width);
+        float ypos = (float)((uint32_t)rand() % p_image->m_height);
+        agf_texture_blit_tiled_blob(p_image, cone, xpos, ypos);
     }
 
     agf_image_free(cone);
@@ -396,14 +396,14 @@ int agf_texture_generate_blobs(AGFImage *image, uint16_t nparticles)
     return 1;
 }
 
-AGFTextureAnimation *agf_texture_animation_alloc_with_free(AGFTextureAnimationType type, uint16_t width, uint16_t height, uint16_t nparticles, AGFFreeFunc free_func)
+AGFTextureAnimation *agf_texture_animation_alloc_with_free(AGFTextureAnimationType p_type, uint16_t p_width, uint16_t p_height, uint16_t p_nparticles, AGFFreeFunc p_free_func)
 {
     AGFTextureAnimation *animation;
     uint16_t n;
     uint16_t shape_width;
     uint16_t shape_height;
 
-    if (width == 0 || height == 0 || nparticles == 0 || free_func == NULL) {
+    if (p_width == 0 || p_height == 0 || p_nparticles == 0 || p_free_func == NULL) {
         return NULL;
     }
 
@@ -412,33 +412,33 @@ AGFTextureAnimation *agf_texture_animation_alloc_with_free(AGFTextureAnimationTy
         return NULL;
     }
 
-    animation->type = type;
-    animation->width = width;
-    animation->height = height;
-    animation->nparticles = nparticles;
-    animation->xpos = NULL;
-    animation->ypos = NULL;
-    animation->xspeed = NULL;
-    animation->yspeed = NULL;
-    animation->shape = NULL;
-    animation->free_func = free_func;
+    animation->m_type = p_type;
+    animation->m_width = p_width;
+    animation->m_height = p_height;
+    animation->m_nparticles = p_nparticles;
+    animation->m_xpos = NULL;
+    animation->m_ypos = NULL;
+    animation->m_xspeed = NULL;
+    animation->m_yspeed = NULL;
+    animation->m_shape = NULL;
+    animation->m_free_func = p_free_func;
 
-    animation->xpos = (int32_t *)malloc((uint32_t)nparticles * sizeof(int32_t));
-    animation->ypos = (int32_t *)malloc((uint32_t)nparticles * sizeof(int32_t));
-    animation->xspeed = (int32_t *)malloc((uint32_t)nparticles * sizeof(int32_t));
-    animation->yspeed = (int32_t *)malloc((uint32_t)nparticles * sizeof(int32_t));
+    animation->m_xpos = (int32_t *)malloc((uint32_t)p_nparticles * sizeof(int32_t));
+    animation->m_ypos = (int32_t *)malloc((uint32_t)p_nparticles * sizeof(int32_t));
+    animation->m_xspeed = (int32_t *)malloc((uint32_t)p_nparticles * sizeof(int32_t));
+    animation->m_yspeed = (int32_t *)malloc((uint32_t)p_nparticles * sizeof(int32_t));
 
-    if (animation->xpos == NULL || animation->ypos == NULL || animation->xspeed == NULL || animation->yspeed == NULL) {
+    if (animation->m_xpos == NULL || animation->m_ypos == NULL || animation->m_xspeed == NULL || animation->m_yspeed == NULL) {
         agf_texture_animation_free(animation);
         return NULL;
     }
 
-    if (type == AGF_TEXTURE_ANIMATION_LUMPS) {
-        shape_width = (uint16_t)((uint32_t)width / 5);
-        shape_height = (uint16_t)((uint32_t)height / 5);
+    if (p_type == AGF_TEXTURE_ANIMATION_LUMPS) {
+        shape_width = (uint16_t)((uint32_t)p_width / 5);
+        shape_height = (uint16_t)((uint32_t)p_height / 5);
     } else {
-        shape_width = (uint16_t)(((uint32_t)width * 3) / 5);
-        shape_height = (uint16_t)(((uint32_t)height * 3) / 5);
+        shape_width = (uint16_t)(((uint32_t)p_width * 3) / 5);
+        shape_height = (uint16_t)(((uint32_t)p_height * 3) / 5);
     }
 
     if (shape_width == 0) {
@@ -448,82 +448,85 @@ AGFTextureAnimation *agf_texture_animation_alloc_with_free(AGFTextureAnimationTy
         shape_height = 1;
     }
 
-    animation->shape = agf_image_alloc_8(shape_width, shape_height);
-    if (animation->shape == NULL) {
+    animation->m_shape = agf_image_alloc_8(shape_width, shape_height);
+    if (animation->m_shape == NULL) {
         agf_texture_animation_free(animation);
         return NULL;
     }
 
-    if (type == AGF_TEXTURE_ANIMATION_LUMPS) {
-        agf_texture_generate_sphere(animation->shape);
+    if (p_type == AGF_TEXTURE_ANIMATION_LUMPS) {
+        agf_texture_generate_sphere(animation->m_shape);
     } else {
-        agf_texture_generate_cone(animation->shape);
+        agf_texture_generate_cone(animation->m_shape);
     }
 
-    for (n = 0; n < nparticles; n++) {
+    for (n = 0; n < p_nparticles; n++) {
         int32_t angle = rand() % 360;
         int32_t speed = 128 + (rand() % 128);
         double radians = (double)angle * 3.141593 / 180.0;
 
-        animation->xpos[n] = (int32_t)((uint32_t)(rand() % width) << 8);
-        animation->ypos[n] = (int32_t)((uint32_t)(rand() % height) << 8);
-        animation->xspeed[n] = (int32_t)(cos(radians) * (double)speed);
-        animation->yspeed[n] = (int32_t)(sin(radians) * (double)speed);
+        animation->m_xpos[n] = (int32_t)((uint32_t)(rand() % p_width) << 8);
+        animation->m_ypos[n] = (int32_t)((uint32_t)(rand() % p_height) << 8);
+        animation->m_xspeed[n] = (int32_t)(cos(radians) * (double)speed);
+        animation->m_yspeed[n] = (int32_t)(sin(radians) * (double)speed);
     }
 
     return animation;
 }
 
-void agf_texture_animation_free(AGFTextureAnimation *animation)
+void agf_texture_animation_free(AGFTextureAnimation *p_animation)
 {
-    if (animation != NULL && animation->free_func != NULL) {
-        animation->free_func(animation->xpos);
-        animation->free_func(animation->ypos);
-        animation->free_func(animation->xspeed);
-        animation->free_func(animation->yspeed);
-        agf_image_free(animation->shape);
-        animation->free_func(animation);
+    if (p_animation != NULL && p_animation->m_free_func != NULL) {
+        p_animation->m_free_func(p_animation->m_xpos);
+        p_animation->m_free_func(p_animation->m_ypos);
+        p_animation->m_free_func(p_animation->m_xspeed);
+        p_animation->m_free_func(p_animation->m_yspeed);
+        agf_image_free(p_animation->m_shape);
+        p_animation->m_free_func(p_animation);
     }
 }
 
-int agf_texture_animation_render(AGFTextureAnimation *animation, AGFImage *image)
+int agf_texture_animation_render(AGFTextureAnimation *p_animation, AGFImage *p_image)
 {
     uint16_t n;
     int32_t width_fixed;
     int32_t height_fixed;
 
-    if (animation == NULL || !agf_texture_is_mono8(image) || image->width != animation->width || image->height != animation->height) {
+    if (p_animation == NULL ||
+        !agf_texture_is_mono8(p_image) ||
+        p_image->m_width != p_animation->m_width ||
+        p_image->m_height != p_animation->m_height) {
         return 0;
     }
 
-    width_fixed = (int32_t)animation->width << 8;
-    height_fixed = (int32_t)animation->height << 8;
+    width_fixed = (int32_t)p_animation->m_width << 8;
+    height_fixed = (int32_t)p_animation->m_height << 8;
 
-    memset(image->data, 0, agf_image_size(image));
+    memset(p_image->m_data, 0, agf_image_size(p_image));
 
-    for (n = 0; n < animation->nparticles; n++) {
-        float xpos = (float)(animation->xpos[n] >> 8);
-        float ypos = (float)(animation->ypos[n] >> 8);
+    for (n = 0; n < p_animation->m_nparticles; n++) {
+        float xpos = (float)(p_animation->m_xpos[n] >> 8);
+        float ypos = (float)(p_animation->m_ypos[n] >> 8);
 
-        if (animation->type == AGF_TEXTURE_ANIMATION_LUMPS) {
-            agf_texture_blit_tiled_lump(image, animation->shape, xpos, ypos);
+        if (p_animation->m_type == AGF_TEXTURE_ANIMATION_LUMPS) {
+            agf_texture_blit_tiled_lump(p_image, p_animation->m_shape, xpos, ypos);
         } else {
-            agf_texture_blit_tiled_blob(image, animation->shape, xpos, ypos);
+            agf_texture_blit_tiled_blob(p_image, p_animation->m_shape, xpos, ypos);
         }
 
-        animation->xpos[n] += animation->xspeed[n];
-        animation->ypos[n] += animation->yspeed[n];
+        p_animation->m_xpos[n] += p_animation->m_xspeed[n];
+        p_animation->m_ypos[n] += p_animation->m_yspeed[n];
 
-        if (animation->xpos[n] >= width_fixed) {
-            animation->xpos[n] -= width_fixed;
-        } else if (animation->xpos[n] < 0) {
-            animation->xpos[n] += width_fixed;
+        if (p_animation->m_xpos[n] >= width_fixed) {
+            p_animation->m_xpos[n] -= width_fixed;
+        } else if (p_animation->m_xpos[n] < 0) {
+            p_animation->m_xpos[n] += width_fixed;
         }
 
-        if (animation->ypos[n] >= height_fixed) {
-            animation->ypos[n] -= height_fixed;
-        } else if (animation->ypos[n] < 0) {
-            animation->ypos[n] += height_fixed;
+        if (p_animation->m_ypos[n] >= height_fixed) {
+            p_animation->m_ypos[n] -= height_fixed;
+        } else if (p_animation->m_ypos[n] < 0) {
+            p_animation->m_ypos[n] += height_fixed;
         }
     }
 
