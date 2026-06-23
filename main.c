@@ -425,7 +425,7 @@ static void drawRotatingMesh(AGFImage *p_image, AGFDepthBuffer *p_depth, float p
             winding = ax * by - ay * bx;
 
             if (quad->m_polygonIndex < mesh.m_polygonHull.m_nquads && winding > 0) {
-                agf_draw_polygon_lit_flat(p_image, p_depth, polygon, 4, &light);
+                agf_draw_polygon_lit_gouraud(p_image, p_depth, polygon, 4, &light);
             }
         }
     }

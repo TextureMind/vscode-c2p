@@ -337,13 +337,139 @@ int agf_draw_polygon_flat(AGFImage *p_image, AGFDepthBuffer *p_depth, const AGFV
     return 1;
 }
 
+static int32_t agf_edge_function_color(const AGFVertex3c *p_a, const AGFVertex3c *p_b, int32_t p_x, int32_t p_y)
+{
+    return (p_x - (int32_t)p_a->m_x) * ((int32_t)p_b->m_y - (int32_t)p_a->m_y) -
+           (p_y - (int32_t)p_a->m_y) * ((int32_t)p_b->m_x - (int32_t)p_a->m_x);
+}
+
+int agf_draw_triangle_gouraud(AGFImage *p_image, AGFDepthBuffer *p_depth, const AGFVertex3c *p_v0, const AGFVertex3c *p_v1, const AGFVertex3c *p_v2)
+{
+    int32_t min_x;
+    int32_t min_y;
+    int32_t max_x;
+    int32_t max_y;
+    int32_t area;
+    int32_t x;
+    int32_t y;
+    uint32_t triangle_depth;
+
+    if (!agf_render_target_valid(p_image, p_depth) || p_v0 == NULL || p_v1 == NULL || p_v2 == NULL) {
+        return 0;
+    }
+
+    min_x = p_v0->m_x;
+    if (p_v1->m_x < min_x) min_x = p_v1->m_x;
+    if (p_v2->m_x < min_x) min_x = p_v2->m_x;
+
+    max_x = p_v0->m_x;
+    if (p_v1->m_x > max_x) max_x = p_v1->m_x;
+    if (p_v2->m_x > max_x) max_x = p_v2->m_x;
+
+    min_y = p_v0->m_y;
+    if (p_v1->m_y < min_y) min_y = p_v1->m_y;
+    if (p_v2->m_y < min_y) min_y = p_v2->m_y;
+
+    max_y = p_v0->m_y;
+    if (p_v1->m_y > max_y) max_y = p_v1->m_y;
+    if (p_v2->m_y > max_y) max_y = p_v2->m_y;
+
+    if (min_x < 0) min_x = 0;
+    if (min_y < 0) min_y = 0;
+    if (max_x >= p_image->m_width) max_x = p_image->m_width - 1;
+    if (max_y >= p_image->m_height) max_y = p_image->m_height - 1;
+
+    if (min_x > max_x || min_y > max_y) {
+        return 1;
+    }
+
+    area = agf_edge_function_color(p_v0, p_v1, p_v2->m_x, p_v2->m_y);
+    if (area == 0) {
+        return 1;
+    }
+
+    if (area < 0) {
+        const AGFVertex3c *tmp = p_v1;
+        p_v1 = p_v2;
+        p_v2 = tmp;
+        area = -area;
+    }
+
+    triangle_depth = (p_v0->m_z / 3) + (p_v1->m_z / 3) + (p_v2->m_z / 3);
+
+    for (y = min_y; y <= max_y; y++) {
+        uint8_t *dst = &p_image->m_data[y * p_image->m_stride];
+        uint32_t *zbuf = &p_depth->m_data[y * p_depth->m_stride];
+
+        for (x = min_x; x <= max_x; x++) {
+            int32_t w0 = agf_edge_function_color(p_v1, p_v2, x, y);
+            int32_t w1 = agf_edge_function_color(p_v2, p_v0, x, y);
+            int32_t w2 = agf_edge_function_color(p_v0, p_v1, x, y);
+
+            if (w0 >= 0 && w1 >= 0 && w2 >= 0) {
+                if (triangle_depth < zbuf[x]) {
+                    int32_t color = (w0 * (int32_t)p_v0->m_color + w1 * (int32_t)p_v1->m_color + w2 * (int32_t)p_v2->m_color) / area;
+                    if (color < 0) {
+                        color = 0;
+                    } else if (color > 255) {
+                        color = 255;
+                    }
+                    zbuf[x] = triangle_depth;
+                    dst[x] = (uint8_t)color;
+                }
+            }
+        }
+    }
+
+    return 1;
+}
+
+int agf_draw_polygon_gouraud(AGFImage *p_image, AGFDepthBuffer *p_depth, const AGFVertex3c *p_vertices, uint16_t p_count)
+{
+    uint16_t i;
+
+    if (p_vertices == NULL || p_count < 3) {
+        return 0;
+    }
+
+    for (i = 1; i + 1 < p_count; i++) {
+        if (!agf_draw_triangle_gouraud(p_image, p_depth, &p_vertices[0], &p_vertices[i], &p_vertices[i + 1])) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+uint8_t agf_light_vertex_color(const AGFDirectionalLight *p_light, int16_t p_nx, int16_t p_ny, int16_t p_nz)
+{
+    int32_t dot;
+    int32_t color;
+
+    if (p_light == NULL) {
+        return 0;
+    }
+
+    dot = ((int32_t)p_nx * p_light->m_nx + (int32_t)p_ny * p_light->m_ny + (int32_t)p_nz * p_light->m_nz) / AGF_NORMAL_SCALE;
+    if (dot < 0) {
+        dot = 0;
+    } else if (dot > AGF_NORMAL_SCALE) {
+        dot = AGF_NORMAL_SCALE;
+    }
+
+    color = p_light->m_ambient + (int32_t)(((uint32_t)p_light->m_intensity * (uint32_t)dot) / AGF_NORMAL_SCALE);
+    if (color > 255) {
+        color = 255;
+    }
+
+    return (uint8_t)color;
+}
+
 uint8_t agf_light_flat_color(const AGFDirectionalLight *p_light, const AGFVertex3n *p_vertices, uint16_t p_count)
 {
     int32_t nx = 0;
     int32_t ny = 0;
     int32_t nz = 0;
-    int32_t dot;
-    int32_t color;
     uint16_t i;
 
     if (p_light == NULL || p_vertices == NULL || p_count == 0) {
@@ -360,19 +486,7 @@ uint8_t agf_light_flat_color(const AGFDirectionalLight *p_light, const AGFVertex
     ny /= p_count;
     nz /= p_count;
 
-    dot = (nx * p_light->m_nx + ny * p_light->m_ny + nz * p_light->m_nz) / AGF_NORMAL_SCALE;
-    if (dot < 0) {
-        dot = 0;
-    } else if (dot > AGF_NORMAL_SCALE) {
-        dot = AGF_NORMAL_SCALE;
-    }
-
-    color = p_light->m_ambient + (int32_t)(((uint32_t)p_light->m_intensity * (uint32_t)dot) / AGF_NORMAL_SCALE);
-    if (color > 255) {
-        color = 255;
-    }
-
-    return (uint8_t)color;
+    return agf_light_vertex_color(p_light, (int16_t)nx, (int16_t)ny, (int16_t)nz);
 }
 
 int agf_draw_polygon_lit_flat(AGFImage *p_image, AGFDepthBuffer *p_depth, const AGFVertex3n *p_vertices, uint16_t p_count, const AGFDirectionalLight *p_light)
@@ -391,4 +505,24 @@ int agf_draw_polygon_lit_flat(AGFImage *p_image, AGFDepthBuffer *p_depth, const 
     }
 
     return agf_draw_polygon_flat(p_image, p_depth, flat_vertices, p_count, agf_light_flat_color(p_light, p_vertices, p_count));
+}
+
+
+int agf_draw_polygon_lit_gouraud(AGFImage *p_image, AGFDepthBuffer *p_depth, const AGFVertex3n *p_vertices, uint16_t p_count, const AGFDirectionalLight *p_light)
+{
+    AGFVertex3c shaded_vertices[8];
+    uint16_t i;
+
+    if (p_vertices == NULL || p_count < 3 || p_count > 8) {
+        return 0;
+    }
+
+    for (i = 0; i < p_count; i++) {
+        shaded_vertices[i].m_x = p_vertices[i].m_x;
+        shaded_vertices[i].m_y = p_vertices[i].m_y;
+        shaded_vertices[i].m_z = p_vertices[i].m_z;
+        shaded_vertices[i].m_color = agf_light_vertex_color(p_light, p_vertices[i].m_nx, p_vertices[i].m_ny, p_vertices[i].m_nz);
+    }
+
+    return agf_draw_polygon_gouraud(p_image, p_depth, shaded_vertices, p_count);
 }

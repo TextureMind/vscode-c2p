@@ -48,6 +48,14 @@ typedef struct AGFVertex3n
     int16_t m_nz;
 } AGFVertex3n;
 
+typedef struct AGFVertex3c
+{
+    int16_t m_x;
+    int16_t m_y;
+    uint32_t m_z;
+    uint8_t m_color;
+} AGFVertex3c;
+
 typedef struct AGFDirectionalLight
 {
     int16_t m_nx;
@@ -136,7 +144,11 @@ void agf_depth_buffer_free(AGFDepthBuffer *p_buffer);
 void agf_depth_buffer_clear(AGFDepthBuffer *p_buffer, uint32_t p_depth);
 int agf_draw_triangle_flat(AGFImage *p_image, AGFDepthBuffer *p_depth, const AGFVertex3i *p_v0, const AGFVertex3i *p_v1, const AGFVertex3i *p_v2, uint8_t p_color);
 int agf_draw_polygon_flat(AGFImage *p_image, AGFDepthBuffer *p_depth, const AGFVertex3i *p_vertices, uint16_t p_count, uint8_t p_color);
+int agf_draw_triangle_gouraud(AGFImage *p_image, AGFDepthBuffer *p_depth, const AGFVertex3c *p_v0, const AGFVertex3c *p_v1, const AGFVertex3c *p_v2);
+int agf_draw_polygon_gouraud(AGFImage *p_image, AGFDepthBuffer *p_depth, const AGFVertex3c *p_vertices, uint16_t p_count);
+uint8_t agf_light_vertex_color(const AGFDirectionalLight *p_light, int16_t p_nx, int16_t p_ny, int16_t p_nz);
 uint8_t agf_light_flat_color(const AGFDirectionalLight *p_light, const AGFVertex3n *p_vertices, uint16_t p_count);
 int agf_draw_polygon_lit_flat(AGFImage *p_image, AGFDepthBuffer *p_depth, const AGFVertex3n *p_vertices, uint16_t p_count, const AGFDirectionalLight *p_light);
+int agf_draw_polygon_lit_gouraud(AGFImage *p_image, AGFDepthBuffer *p_depth, const AGFVertex3n *p_vertices, uint16_t p_count, const AGFDirectionalLight *p_light);
 
 #endif
