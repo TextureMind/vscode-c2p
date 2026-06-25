@@ -75,8 +75,16 @@ __attribute__((always_inline)) inline short mouseRight()
     return !((*(volatile UWORD*)0xdff016)&(1<<10));
 }
 
+volatile UBYTE* REG_VHPOSR_MSB = (UBYTE *) 0xDFF006;
+
+#define SCANLINE_FIRST_INDEX        0x2C  // (44)
+#define SCANLINE_NTSC_LAST_INDEX    (SCANLINE_FIRST_INDEX + 199)
+#define SCANLINE_PAL_LAST_INDEX     (SCANLINE_FIRST_INDEX + 255)
+#define SCANLINE_CUSTOM_INDEX       100
+
 static void waitVbl()
 {
+    /*
 	while (1) {
 		volatile ULONG vpos =* (volatile ULONG*)0xDFF004;
 		vpos &= 0x1ff00;
@@ -94,6 +102,11 @@ static void waitVbl()
 			break;
         }
 	}
+    */
+
+//  WaitTOF();
+
+    while (*REG_VHPOSR_MSB != SCANLINE_CUSTOM_INDEX ) {}
 }
 
 static void agf_project_vertex(const AGFVector3f *p_point, AGFVertex3i *p_vertex, uint16_t p_width, uint16_t p_height, float p_camera_z, float p_focal)
@@ -858,9 +871,9 @@ int main(int argc, char **argv)
     stream = fopen("floortexture.raw", "rb");
     if (stream == NULL) {
         printf("Unable to open floortexture.raw file. Generate animated blobs texture instead\n");
-        textureAnimation = agf_texture_animation_alloc(AGF_TEXTURE_ANIMATION_BLOBS, textureImage->m_width, textureImage->m_height, 8);
+        textureAnimation = agf_texture_animation_alloc(AGF_TEXTURE_ANIMATION_BLOBS, textureImage->m_width, textureImage->m_height, 50);
         if (textureAnimation == NULL) {
-            agf_texture_generate_blobs(textureImage, 8);
+            agf_texture_generate_blobs(textureImage, 50);
         } else {
             agf_texture_animation_render(textureAnimation, textureImage);
         }
@@ -889,7 +902,7 @@ int main(int argc, char **argv)
 
     int y2 = 0;
 
-    int example = 1;
+    int example = 0;
     int mouseRightDown = 0;
 
     while (!mouseLeft()) {
@@ -900,9 +913,7 @@ int main(int argc, char **argv)
 
         if (mouseRight() && mouseRightDown == 0) {
             example = (example + 1) % 4;
-            if (example == 1) {
-                memset(screenImage->m_data, 0, agf_image_size(screenImage));
-            }
+            memset(screenImage->m_data, 0, agf_image_size(screenImage));
 
             mouseRightDown = 1;
         } else if (!mouseRight() && mouseRightDown == 1) {
@@ -913,12 +924,12 @@ int main(int argc, char **argv)
             agf_texture_animation_render(textureAnimation, textureImage);
         }
 
-        if (example == 3) { // Rotating perspective corrected textured cube
+        if (example == 0) { // Rotating perspective corrected textured cube
             drawRotatingTexturedCube(screenImage, depthBuffer, cubeFaceTextures, angle);
-        } else if (example == 2) { // Rotating depth buffered torus
+        } else if (example == 1) { // Rotating depth buffered torus
             drawRotatingTorus(screenImage, depthBuffer, angle);
-        } else if (example == 0) { // Image rotation with bilinear filtering
-            scale = 1.0f - ((cos(angle) + 1.0f) / 2.25f);
+        } else if (example == 2) { // Image rotation with bilinear filtering
+            scale = 1.0f - ((cos(angle) + 1.0f) / 4.25f);
 
             sinas = sin(-angle) * 65536 * scale;
             cosas = cos(-angle) * 65536 * scale;
