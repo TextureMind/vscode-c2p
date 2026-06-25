@@ -106,6 +106,56 @@ static void agf_project_vertex(const AGFVector3f *p_point, AGFVertex3i *p_vertex
     p_vertex->m_z = (uint32_t)(z3 * 256.0f);
 }
 
+static int agf_create_cube_face_textures(AGFImage **p_textures)
+{
+    uint16_t face;
+
+    if (p_textures == NULL) {
+        return 0;
+    }
+
+    for (face = 0; face < 6; face++) {
+        uint16_t x;
+        uint16_t y;
+
+        p_textures[face] = agf_image_alloc_8(64, 64);
+        if (p_textures[face] == NULL) {
+            return 0;
+        }
+
+        for (y = 0; y < p_textures[face]->m_height; y++) {
+            uint8_t *dst = &p_textures[face]->m_data[y * p_textures[face]->m_stride];
+
+            for (x = 0; x < p_textures[face]->m_width; x++) {
+                uint8_t checker = (uint8_t)((((x >> 3) ^ (y >> 3)) & 1) ? 48 : 0);
+                uint8_t grid = (uint8_t)(((x & 15) == 0 || (y & 15) == 0) ? 42 : 0);
+                uint8_t ramp = (uint8_t)(((uint16_t)x * (face + 1) + (uint16_t)y * (6 - face)) >> 2);
+                uint16_t color = 48 + face * 24 + checker + grid + (ramp & 31);
+                if (color > 255) {
+                    color = 255;
+                }
+                dst[x] = (uint8_t)color;
+            }
+        }
+    }
+
+    return 1;
+}
+
+static void agf_release_cube_face_textures(AGFImage **p_textures)
+{
+    uint16_t face;
+
+    if (p_textures == NULL) {
+        return;
+    }
+
+    for (face = 0; face < 6; face++) {
+        agf_image_free(p_textures[face]);
+        p_textures[face] = NULL;
+    }
+}
+
 static void agf_build_cube_mesh(AGFMesh3D *p_mesh)
 {
     static AGFVector3f points[8] = {
@@ -441,6 +491,109 @@ static void drawRotatingCube(AGFImage *p_image, AGFDepthBuffer *p_depth, float p
     drawRotatingMesh(p_image, p_depth, p_angle, agf_build_cube_mesh, 80.0f, 330.0f, 190.0f);
 }
 
+static void drawRotatingTexturedCube(AGFImage *p_image, AGFDepthBuffer *p_depth, AGFImage **p_face_textures, float p_angle)
+{
+    static const AGFVector3f source_points[8] = {
+        {-1.0f, -1.0f, -1.0f},
+        { 1.0f, -1.0f, -1.0f},
+        { 1.0f,  1.0f, -1.0f},
+        {-1.0f,  1.0f, -1.0f},
+        {-1.0f, -1.0f,  1.0f},
+        { 1.0f, -1.0f,  1.0f},
+        { 1.0f,  1.0f,  1.0f},
+        {-1.0f,  1.0f,  1.0f}
+    };
+    static const uint8_t faces[6][4] = {
+        {0, 1, 2, 3},
+        {4, 7, 6, 5},
+        {0, 4, 5, 1},
+        {3, 2, 6, 7},
+        {1, 5, 6, 2},
+        {0, 3, 7, 4}
+    };
+    AGFMatrix4x4 scale_matrix;
+    AGFMatrix4x4 rotation_x;
+    AGFMatrix4x4 rotation_y;
+    AGFMatrix4x4 rotation_z;
+    AGFMatrix4x4 model_matrix;
+    AGFMatrix4x4 tmp_matrix;
+    AGFVector3f transformed_points[8];
+    AGFVertex3i projected_points[8];
+    float scale = 80.0f;
+    float camera_z = 330.0f;
+    float focal = 190.0f;
+    uint32_t i;
+    uint32_t face;
+
+    if (p_face_textures == NULL) {
+        return;
+    }
+
+    memset(p_image->m_data, 0, agf_image_size(p_image));
+    agf_depth_buffer_clear(p_depth, AGF_DEPTH_MAX);
+
+    agf_matrix_scale(&scale_matrix, scale, scale, scale);
+    agf_matrix_rotation_y(&rotation_y, p_angle);
+    agf_matrix_rotation_x(&rotation_x, p_angle * 0.73f);
+    agf_matrix_rotation_z(&rotation_z, p_angle * 0.31f);
+    agf_matrix_multiply(&tmp_matrix, &rotation_x, &rotation_y);
+    agf_matrix_multiply(&model_matrix, &rotation_z, &tmp_matrix);
+    agf_matrix_multiply(&tmp_matrix, &model_matrix, &scale_matrix);
+    model_matrix = tmp_matrix;
+
+    for (i = 0; i < 8; i++) {
+        transformed_points[i] = agf_matrix_transform_point(&model_matrix, source_points[i]);
+        agf_project_vertex(&transformed_points[i], &projected_points[i], p_image->m_width, p_image->m_height, camera_z, focal);
+    }
+
+    for (face = 0; face < 6; face++) {
+        AGFImage *texture = p_face_textures[face];
+        AGFVertex3t polygon[4];
+        int32_t ax;
+        int32_t ay;
+        int32_t bx;
+        int32_t by;
+        int32_t winding;
+        uint32_t vertex;
+        int32_t u1;
+        int32_t v1;
+
+        if (texture == NULL) {
+            continue;
+        }
+
+        u1 = (int32_t)texture->m_width * 2;
+        v1 = (int32_t)texture->m_height * 2;
+
+        for (vertex = 0; vertex < 4; vertex++) {
+            uint8_t point_index = faces[face][vertex];
+
+            polygon[vertex].m_x = projected_points[point_index].m_x;
+            polygon[vertex].m_y = projected_points[point_index].m_y;
+            polygon[vertex].m_z = projected_points[point_index].m_z;
+        }
+
+        polygon[0].m_u = 0;
+        polygon[0].m_v = 0;
+        polygon[1].m_u = u1;
+        polygon[1].m_v = 0;
+        polygon[2].m_u = u1;
+        polygon[2].m_v = v1;
+        polygon[3].m_u = 0;
+        polygon[3].m_v = v1;
+
+        ax = (int32_t)polygon[1].m_x - polygon[0].m_x;
+        ay = (int32_t)polygon[1].m_y - polygon[0].m_y;
+        bx = (int32_t)polygon[2].m_x - polygon[0].m_x;
+        by = (int32_t)polygon[2].m_y - polygon[0].m_y;
+        winding = ax * by - ay * bx;
+
+        if (winding > 0) {
+            agf_draw_polygon_textured(p_image, p_depth, texture, polygon, 4);
+        }
+    }
+}
+
 static void drawRotatingTorus(AGFImage *p_image, AGFDepthBuffer *p_depth, float p_angle)
 {
     drawRotatingMesh(p_image, p_depth, p_angle, agf_build_torus_mesh, 70.0f, 360.0f, 190.0f);
@@ -671,13 +824,15 @@ int main(int argc, char **argv)
 
     AGFImage *screenImage = agf_image_alloc_8(320, 240);
     AGFImage *textureImage = agf_image_alloc_8(256, 256);
+    AGFImage *cubeFaceTextures[6] = {NULL, NULL, NULL, NULL, NULL, NULL};
     AGFDepthBuffer *depthBuffer = agf_depth_buffer_alloc(320, 240);
     AGFTextureAnimation *textureAnimation = NULL;
 
-    if (screenImage == NULL || textureImage == NULL || depthBuffer == NULL) {
+    if (screenImage == NULL || textureImage == NULL || depthBuffer == NULL || !agf_create_cube_face_textures(cubeFaceTextures)) {
         printf("Unable to allocate image buffers\n");
         agf_image_free(screenImage);
         agf_image_free(textureImage);
+        agf_release_cube_face_textures(cubeFaceTextures);
         agf_depth_buffer_free(depthBuffer);
         CloseScreen(scr);
         return 0;
@@ -744,7 +899,7 @@ int main(int argc, char **argv)
         cosAngle = cos(angle);
 
         if (mouseRight() && mouseRightDown == 0) {
-            example = (example + 1) % 3;
+            example = (example + 1) % 4;
             if (example == 1) {
                 memset(screenImage->m_data, 0, agf_image_size(screenImage));
             }
@@ -758,7 +913,9 @@ int main(int argc, char **argv)
             agf_texture_animation_render(textureAnimation, textureImage);
         }
 
-        if (example == 2) { // Rotating depth buffered torus
+        if (example == 3) { // Rotating perspective corrected textured cube
+            drawRotatingTexturedCube(screenImage, depthBuffer, cubeFaceTextures, angle);
+        } else if (example == 2) { // Rotating depth buffered torus
             drawRotatingTorus(screenImage, depthBuffer, angle);
         } else if (example == 0) { // Image rotation with bilinear filtering
             scale = 1.0f - ((cos(angle) + 1.0f) / 2.25f);
@@ -862,13 +1019,13 @@ int main(int argc, char **argv)
     }
 #else
     // simple blit copy
-    for (y = 0; y < screenImage->height; y++) {
-        memcpy(&screenImage->data[y * screenImage->stride], &textureImage->data[y * textureImage->stride], textureImage->width);
+    for (y = 0; y < screenImage->m_height; y++) {
+        memcpy(&screenImage->m_data[y * screenImage->m_stride], &textureImage->m_data[y * textureImage->m_stride], textureImage->m_width);
     }
 
 #ifdef USE_C2P_KALMS
-        chunkyToPlanar2Init(screenImage->width, screenImage->height, 0);
-        chunkyToPlanar2(screenImage->data, scr->RastPort.BitMap->Planes[0]);
+        chunkyToPlanar2Init(screenImage->m_width, screenImage->m_height, 0);
+        chunkyToPlanar2(screenImage->m_data, scr->RastPort.BitMap->Planes[0]);
 #else
         chunkyToPlanar(&c2p);
 #endif
@@ -878,6 +1035,7 @@ int main(int argc, char **argv)
     agf_depth_buffer_free(depthBuffer);
     agf_image_free(screenImage);
     agf_image_free(textureImage);
+    agf_release_cube_face_textures(cubeFaceTextures);
 
     CloseScreen(scr);
 }

@@ -441,6 +441,156 @@ int agf_draw_polygon_gouraud(AGFImage *p_image, AGFDepthBuffer *p_depth, const A
     return 1;
 }
 
+static int agf_texture_target_valid(const AGFImage *p_texture)
+{
+    return p_texture != NULL && p_texture->m_data != NULL && p_texture->m_depth == AGF_IMAGE_DEPTH_8 && p_texture->m_width > 0 && p_texture->m_height > 0;
+}
+
+static int32_t agf_edge_function_textured(const AGFVertex3t *p_a, const AGFVertex3t *p_b, int32_t p_x, int32_t p_y)
+{
+    return (p_x - (int32_t)p_a->m_x) * ((int32_t)p_b->m_y - (int32_t)p_a->m_y) -
+           (p_y - (int32_t)p_a->m_y) * ((int32_t)p_b->m_x - (int32_t)p_a->m_x);
+}
+
+static uint16_t agf_wrap_coord(int32_t p_value, uint16_t p_limit)
+{
+    int32_t value;
+
+    if (p_limit == 0) {
+        return 0;
+    }
+
+    value = p_value % (int32_t)p_limit;
+    if (value < 0) {
+        value += p_limit;
+    }
+
+    return (uint16_t)value;
+}
+
+int agf_draw_triangle_textured(AGFImage *p_image, AGFDepthBuffer *p_depth, const AGFImage *p_texture, const AGFVertex3t *p_v0, const AGFVertex3t *p_v1, const AGFVertex3t *p_v2)
+{
+    int32_t min_x;
+    int32_t min_y;
+    int32_t max_x;
+    int32_t max_y;
+    int32_t area;
+    int32_t x;
+    int32_t y;
+    float inv_z0;
+    float inv_z1;
+    float inv_z2;
+    float uoz0;
+    float uoz1;
+    float uoz2;
+    float voz0;
+    float voz1;
+    float voz2;
+
+    if (!agf_render_target_valid(p_image, p_depth) || !agf_texture_target_valid(p_texture) || p_v0 == NULL || p_v1 == NULL || p_v2 == NULL) {
+        return 0;
+    }
+
+    min_x = p_v0->m_x;
+    if (p_v1->m_x < min_x) min_x = p_v1->m_x;
+    if (p_v2->m_x < min_x) min_x = p_v2->m_x;
+
+    max_x = p_v0->m_x;
+    if (p_v1->m_x > max_x) max_x = p_v1->m_x;
+    if (p_v2->m_x > max_x) max_x = p_v2->m_x;
+
+    min_y = p_v0->m_y;
+    if (p_v1->m_y < min_y) min_y = p_v1->m_y;
+    if (p_v2->m_y < min_y) min_y = p_v2->m_y;
+
+    max_y = p_v0->m_y;
+    if (p_v1->m_y > max_y) max_y = p_v1->m_y;
+    if (p_v2->m_y > max_y) max_y = p_v2->m_y;
+
+    if (min_x < 0) min_x = 0;
+    if (min_y < 0) min_y = 0;
+    if (max_x >= p_image->m_width) max_x = p_image->m_width - 1;
+    if (max_y >= p_image->m_height) max_y = p_image->m_height - 1;
+
+    if (min_x > max_x || min_y > max_y) {
+        return 1;
+    }
+
+    area = agf_edge_function_textured(p_v0, p_v1, p_v2->m_x, p_v2->m_y);
+    if (area == 0 || p_v0->m_z == 0 || p_v1->m_z == 0 || p_v2->m_z == 0) {
+        return 1;
+    }
+
+    if (area < 0) {
+        const AGFVertex3t *tmp = p_v1;
+        p_v1 = p_v2;
+        p_v2 = tmp;
+        area = -area;
+    }
+
+    inv_z0 = 1.0f / (float)p_v0->m_z;
+    inv_z1 = 1.0f / (float)p_v1->m_z;
+    inv_z2 = 1.0f / (float)p_v2->m_z;
+    uoz0 = (float)p_v0->m_u * inv_z0;
+    uoz1 = (float)p_v1->m_u * inv_z1;
+    uoz2 = (float)p_v2->m_u * inv_z2;
+    voz0 = (float)p_v0->m_v * inv_z0;
+    voz1 = (float)p_v1->m_v * inv_z1;
+    voz2 = (float)p_v2->m_v * inv_z2;
+
+    for (y = min_y; y <= max_y; y++) {
+        uint8_t *dst = &p_image->m_data[y * p_image->m_stride];
+        uint32_t *zbuf = &p_depth->m_data[y * p_depth->m_stride];
+
+        for (x = min_x; x <= max_x; x++) {
+            int32_t w0 = agf_edge_function_textured(p_v1, p_v2, x, y);
+            int32_t w1 = agf_edge_function_textured(p_v2, p_v0, x, y);
+            int32_t w2 = agf_edge_function_textured(p_v0, p_v1, x, y);
+
+            if (w0 >= 0 && w1 >= 0 && w2 >= 0) {
+                float fw0 = (float)w0;
+                float fw1 = (float)w1;
+                float fw2 = (float)w2;
+                float inv_area = 1.0f / (float)area;
+                uint32_t pixel_depth = (uint32_t)((fw0 * (float)p_v0->m_z + fw1 * (float)p_v1->m_z + fw2 * (float)p_v2->m_z) * inv_area);
+
+                if (pixel_depth < zbuf[x]) {
+                    float inv_z = (fw0 * inv_z0 + fw1 * inv_z1 + fw2 * inv_z2) * inv_area;
+
+                    if (inv_z != 0.0f) {
+                        float u = ((fw0 * uoz0 + fw1 * uoz1 + fw2 * uoz2) * inv_area) / inv_z;
+                        float v = ((fw0 * voz0 + fw1 * voz1 + fw2 * voz2) * inv_area) / inv_z;
+                        uint16_t tx = agf_wrap_coord((int32_t)u, p_texture->m_width);
+                        uint16_t ty = agf_wrap_coord((int32_t)v, p_texture->m_height);
+
+                        zbuf[x] = pixel_depth;
+                        dst[x] = p_texture->m_data[ty * p_texture->m_stride + tx];
+                    }
+                }
+            }
+        }
+    }
+
+    return 1;
+}
+
+int agf_draw_polygon_textured(AGFImage *p_image, AGFDepthBuffer *p_depth, const AGFImage *p_texture, const AGFVertex3t *p_vertices, uint16_t p_count)
+{
+    uint16_t i;
+
+    if (p_vertices == NULL || p_count < 3) {
+        return 0;
+    }
+
+    for (i = 1; i + 1 < p_count; i++) {
+        if (!agf_draw_triangle_textured(p_image, p_depth, p_texture, &p_vertices[0], &p_vertices[i], &p_vertices[i + 1])) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
 uint8_t agf_light_vertex_color(const AGFDirectionalLight *p_light, int16_t p_nx, int16_t p_ny, int16_t p_nz)
 {
     int32_t dot;
