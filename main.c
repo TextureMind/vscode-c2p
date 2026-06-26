@@ -602,7 +602,7 @@ static void drawRotatingTexturedCube(AGFImage *p_image, AGFDepthBuffer *p_depth,
         winding = ax * by - ay * bx;
 
         if (winding > 0) {
-            agf_draw_polygon_textured(p_image, p_depth, texture, polygon, 4);
+            agf_draw_polygon_textured_fixed(p_image, p_depth, texture, polygon, 4);
         }
     }
 }

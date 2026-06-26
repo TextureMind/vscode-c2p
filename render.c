@@ -591,6 +591,314 @@ int agf_draw_polygon_textured(AGFImage *p_image, AGFDepthBuffer *p_depth, const 
     return 1;
 }
 
+/* Projected z is already scaled by 256, so reciprocal z needs high precision.
+   Keep enough headroom for u * inv_z / v * inv_z to stay inside int32_t. */
+#define AGF_TEXTURE_INVZ_SHIFT 30
+#define AGF_TEXTURE_SPAN_SIZE 8
+
+typedef struct AGFTextureEdge
+{
+    int32_t m_y_start;
+    int32_t m_y_end;
+    int32_t m_x;
+    int32_t m_x_step;
+    int32_t m_z;
+    int32_t m_z_step;
+    int32_t m_inv_z;
+    int32_t m_inv_z_step;
+    int32_t m_uoz;
+    int32_t m_uoz_step;
+    int32_t m_voz;
+    int32_t m_voz_step;
+} AGFTextureEdge;
+
+static void agf_texture_edge_init(AGFTextureEdge *p_edge, const AGFVertex3t *p_top, const AGFVertex3t *p_bottom, int32_t p_top_inv_z, int32_t p_bottom_inv_z)
+{
+    int32_t dy;
+    int32_t top_uoz;
+    int32_t bottom_uoz;
+    int32_t top_voz;
+    int32_t bottom_voz;
+
+    p_edge->m_y_start = p_top->m_y;
+    p_edge->m_y_end = p_bottom->m_y;
+    p_edge->m_x = (int32_t)p_top->m_x << 16;
+    p_edge->m_z = (int32_t)p_top->m_z;
+    p_edge->m_inv_z = p_top_inv_z;
+    top_uoz = p_top->m_u * p_top_inv_z;
+    bottom_uoz = p_bottom->m_u * p_bottom_inv_z;
+    top_voz = p_top->m_v * p_top_inv_z;
+    bottom_voz = p_bottom->m_v * p_bottom_inv_z;
+    p_edge->m_uoz = top_uoz;
+    p_edge->m_voz = top_voz;
+
+    dy = (int32_t)p_bottom->m_y - (int32_t)p_top->m_y;
+    if (dy == 0) {
+        p_edge->m_x_step = 0;
+        p_edge->m_z_step = 0;
+        p_edge->m_inv_z_step = 0;
+        p_edge->m_uoz_step = 0;
+        p_edge->m_voz_step = 0;
+        return;
+    }
+
+    p_edge->m_x_step = (((int32_t)p_bottom->m_x - (int32_t)p_top->m_x) << 16) / dy;
+    p_edge->m_z_step = ((int32_t)p_bottom->m_z - (int32_t)p_top->m_z) / dy;
+    p_edge->m_inv_z_step = (p_bottom_inv_z - p_top_inv_z) / dy;
+    p_edge->m_uoz_step = (bottom_uoz - top_uoz) / dy;
+    p_edge->m_voz_step = (bottom_voz - top_voz) / dy;
+}
+
+static void agf_texture_edge_step(AGFTextureEdge *p_edge)
+{
+    p_edge->m_x += p_edge->m_x_step;
+    p_edge->m_z += p_edge->m_z_step;
+    p_edge->m_inv_z += p_edge->m_inv_z_step;
+    p_edge->m_uoz += p_edge->m_uoz_step;
+    p_edge->m_voz += p_edge->m_voz_step;
+}
+
+static void agf_texture_edge_advance(AGFTextureEdge *p_edge, int32_t p_count)
+{
+    p_edge->m_x += p_edge->m_x_step * p_count;
+    p_edge->m_z += p_edge->m_z_step * p_count;
+    p_edge->m_inv_z += p_edge->m_inv_z_step * p_count;
+    p_edge->m_uoz += p_edge->m_uoz_step * p_count;
+    p_edge->m_voz += p_edge->m_voz_step * p_count;
+}
+
+static void agf_draw_textured_span_fixed(AGFImage *p_image, AGFDepthBuffer *p_depth, const AGFImage *p_texture, int32_t p_y, const AGFTextureEdge *p_left, const AGFTextureEdge *p_right)
+{
+    int32_t x_start;
+    int32_t x_end;
+    int32_t width;
+    int32_t z;
+    int32_t inv_z;
+    int32_t uoz;
+    int32_t voz;
+    int32_t z_step;
+    int32_t inv_z_step;
+    int32_t uoz_step;
+    int32_t voz_step;
+    uint8_t *dst;
+    uint32_t *zbuf;
+    int32_t x;
+
+    x_start = (p_left->m_x + 0xffff) >> 16;
+    x_end = (p_right->m_x + 0xffff) >> 16;
+
+    if (x_start < 0) {
+        x_start = 0;
+    }
+    if (x_end > p_image->m_width) {
+        x_end = p_image->m_width;
+    }
+    if (x_start >= x_end) {
+        return;
+    }
+
+    width = (p_right->m_x - p_left->m_x) >> 16;
+    if (width <= 0) {
+        return;
+    }
+
+    z_step = (p_right->m_z - p_left->m_z) / width;
+    inv_z_step = (p_right->m_inv_z - p_left->m_inv_z) / width;
+    uoz_step = (p_right->m_uoz - p_left->m_uoz) / width;
+    voz_step = (p_right->m_voz - p_left->m_voz) / width;
+
+    z = p_left->m_z + z_step * (x_start - (p_left->m_x >> 16));
+    inv_z = p_left->m_inv_z + inv_z_step * (x_start - (p_left->m_x >> 16));
+    uoz = p_left->m_uoz + uoz_step * (x_start - (p_left->m_x >> 16));
+    voz = p_left->m_voz + voz_step * (x_start - (p_left->m_x >> 16));
+
+    dst = &p_image->m_data[p_y * p_image->m_stride];
+    zbuf = &p_depth->m_data[p_y * p_depth->m_stride];
+
+    x = x_start;
+    while (x < x_end) {
+        int32_t span_end = x + AGF_TEXTURE_SPAN_SIZE;
+        int32_t span_width;
+        int32_t next_inv_z;
+        int32_t next_uoz;
+        int32_t next_voz;
+        int32_t u;
+        int32_t v;
+        int32_t u_step;
+        int32_t v_step;
+        int32_t i;
+
+        if (span_end > x_end) {
+            span_end = x_end;
+        }
+        span_width = span_end - x;
+        if (span_width <= 0) {
+            break;
+        }
+
+        next_inv_z = inv_z + inv_z_step * span_width;
+        next_uoz = uoz + uoz_step * span_width;
+        next_voz = voz + voz_step * span_width;
+
+        if (inv_z == 0 || next_inv_z == 0) {
+            u = 0;
+            v = 0;
+            u_step = 0;
+            v_step = 0;
+        } else {
+            int32_t next_u;
+            int32_t next_v;
+
+            u = (uoz / inv_z) << 8;
+            v = (voz / inv_z) << 8;
+            next_u = (next_uoz / next_inv_z) << 8;
+            next_v = (next_voz / next_inv_z) << 8;
+            u_step = (next_u - u) / span_width;
+            v_step = (next_v - v) / span_width;
+        }
+
+        for (i = 0; i < span_width; i++) {
+            if ((uint32_t)z < zbuf[x]) {
+                uint16_t tx = agf_wrap_coord(u >> 8, p_texture->m_width);
+                uint16_t ty = agf_wrap_coord(v >> 8, p_texture->m_height);
+
+                zbuf[x] = (uint32_t)z;
+                dst[x] = p_texture->m_data[ty * p_texture->m_stride + tx];
+            }
+
+            x++;
+            z += z_step;
+            inv_z += inv_z_step;
+            uoz += uoz_step;
+            voz += voz_step;
+            u += u_step;
+            v += v_step;
+        }
+    }
+}
+
+static void agf_draw_textured_half_fixed(AGFImage *p_image, AGFDepthBuffer *p_depth, const AGFImage *p_texture, AGFTextureEdge *p_long_edge, AGFTextureEdge *p_short_edge)
+{
+    int32_t y;
+    int32_t skip;
+    int32_t half_height;
+
+    half_height = p_short_edge->m_y_end - p_short_edge->m_y_start;
+    if (half_height <= 0) {
+        return;
+    }
+
+    if (p_short_edge->m_y_end <= 0) {
+        agf_texture_edge_advance(p_short_edge, half_height);
+        agf_texture_edge_advance(p_long_edge, half_height);
+        return;
+    }
+
+    if (p_short_edge->m_y_start < 0) {
+        skip = -p_short_edge->m_y_start;
+        if (skip > half_height) {
+            skip = half_height;
+        }
+        agf_texture_edge_advance(p_short_edge, skip);
+        agf_texture_edge_advance(p_long_edge, skip);
+        p_short_edge->m_y_start += skip;
+    }
+
+    for (y = p_short_edge->m_y_start; y < p_short_edge->m_y_end && y < p_image->m_height; y++) {
+        if (p_long_edge->m_x <= p_short_edge->m_x) {
+            agf_draw_textured_span_fixed(p_image, p_depth, p_texture, y, p_long_edge, p_short_edge);
+        } else {
+            agf_draw_textured_span_fixed(p_image, p_depth, p_texture, y, p_short_edge, p_long_edge);
+        }
+
+        agf_texture_edge_step(p_short_edge);
+        agf_texture_edge_step(p_long_edge);
+    }
+}
+
+int agf_draw_triangle_textured_fixed(AGFImage *p_image, AGFDepthBuffer *p_depth, const AGFImage *p_texture, const AGFVertex3t *p_v0, const AGFVertex3t *p_v1, const AGFVertex3t *p_v2)
+{
+    const AGFVertex3t *top;
+    const AGFVertex3t *middle;
+    const AGFVertex3t *bottom;
+    AGFTextureEdge long_edge;
+    AGFTextureEdge short_edge;
+    int32_t top_inv_z;
+    int32_t middle_inv_z;
+    int32_t bottom_inv_z;
+
+    if (!agf_render_target_valid(p_image, p_depth) || !agf_texture_target_valid(p_texture) || p_v0 == NULL || p_v1 == NULL || p_v2 == NULL) {
+        return 0;
+    }
+
+    if (p_v0->m_z == 0 || p_v1->m_z == 0 || p_v2->m_z == 0) {
+        return 1;
+    }
+
+    top = p_v0;
+    middle = p_v1;
+    bottom = p_v2;
+
+    if (top->m_y > middle->m_y) {
+        const AGFVertex3t *tmp = top;
+        top = middle;
+        middle = tmp;
+    }
+    if (middle->m_y > bottom->m_y) {
+        const AGFVertex3t *tmp = middle;
+        middle = bottom;
+        bottom = tmp;
+    }
+    if (top->m_y > middle->m_y) {
+        const AGFVertex3t *tmp = top;
+        top = middle;
+        middle = tmp;
+    }
+
+    if (top->m_y == bottom->m_y) {
+        return 1;
+    }
+
+    top_inv_z = (int32_t)((1UL << AGF_TEXTURE_INVZ_SHIFT) / top->m_z);
+    middle_inv_z = (int32_t)((1UL << AGF_TEXTURE_INVZ_SHIFT) / middle->m_z);
+    bottom_inv_z = (int32_t)((1UL << AGF_TEXTURE_INVZ_SHIFT) / bottom->m_z);
+
+    if (top_inv_z == 0 || middle_inv_z == 0 || bottom_inv_z == 0) {
+        return 1;
+    }
+
+    agf_texture_edge_init(&long_edge, top, bottom, top_inv_z, bottom_inv_z);
+
+    if (top->m_y < middle->m_y) {
+        agf_texture_edge_init(&short_edge, top, middle, top_inv_z, middle_inv_z);
+        agf_draw_textured_half_fixed(p_image, p_depth, p_texture, &long_edge, &short_edge);
+    }
+
+    if (middle->m_y < bottom->m_y) {
+        agf_texture_edge_init(&short_edge, middle, bottom, middle_inv_z, bottom_inv_z);
+        agf_draw_textured_half_fixed(p_image, p_depth, p_texture, &long_edge, &short_edge);
+    }
+
+    return 1;
+}
+
+int agf_draw_polygon_textured_fixed(AGFImage *p_image, AGFDepthBuffer *p_depth, const AGFImage *p_texture, const AGFVertex3t *p_vertices, uint16_t p_count)
+{
+    uint16_t i;
+
+    if (p_vertices == NULL || p_count < 3) {
+        return 0;
+    }
+
+    for (i = 1; i + 1 < p_count; i++) {
+        if (!agf_draw_triangle_textured_fixed(p_image, p_depth, p_texture, &p_vertices[0], &p_vertices[i], &p_vertices[i + 1])) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
 uint8_t agf_light_vertex_color(const AGFDirectionalLight *p_light, int16_t p_nx, int16_t p_ny, int16_t p_nz)
 {
     int32_t dot;

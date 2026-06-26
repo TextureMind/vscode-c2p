@@ -157,6 +157,8 @@ int agf_draw_triangle_gouraud(AGFImage *p_image, AGFDepthBuffer *p_depth, const 
 int agf_draw_polygon_gouraud(AGFImage *p_image, AGFDepthBuffer *p_depth, const AGFVertex3c *p_vertices, uint16_t p_count);
 int agf_draw_triangle_textured(AGFImage *p_image, AGFDepthBuffer *p_depth, const AGFImage *p_texture, const AGFVertex3t *p_v0, const AGFVertex3t *p_v1, const AGFVertex3t *p_v2);
 int agf_draw_polygon_textured(AGFImage *p_image, AGFDepthBuffer *p_depth, const AGFImage *p_texture, const AGFVertex3t *p_vertices, uint16_t p_count);
+int agf_draw_triangle_textured_fixed(AGFImage *p_image, AGFDepthBuffer *p_depth, const AGFImage *p_texture, const AGFVertex3t *p_v0, const AGFVertex3t *p_v1, const AGFVertex3t *p_v2);
+int agf_draw_polygon_textured_fixed(AGFImage *p_image, AGFDepthBuffer *p_depth, const AGFImage *p_texture, const AGFVertex3t *p_vertices, uint16_t p_count);
 uint8_t agf_light_vertex_color(const AGFDirectionalLight *p_light, int16_t p_nx, int16_t p_ny, int16_t p_nz);
 uint8_t agf_light_flat_color(const AGFDirectionalLight *p_light, const AGFVertex3n *p_vertices, uint16_t p_count);
 int agf_draw_polygon_lit_flat(AGFImage *p_image, AGFDepthBuffer *p_depth, const AGFVertex3n *p_vertices, uint16_t p_count, const AGFDirectionalLight *p_light);
